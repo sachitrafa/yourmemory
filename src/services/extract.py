@@ -1,0 +1,28 @@
+import re
+import spacy
+
+_nlp = spacy.load("en_core_web_sm")
+
+_QUESTION_WORDS = {"what", "who", "where", "when", "why", "how", "which", "whose", "whom"}
+
+
+def is_question(text: str) -> bool:
+    """Return True if the text is a question — questions are not stored as memories."""
+    stripped = text.strip()
+    if stripped.endswith("?"):
+        return True
+    first_word = re.split(r"\s+", stripped.lower())[0]
+    return first_word in _QUESTION_WORDS
+
+
+def categorize(text: str) -> str:
+    """
+    Use spaCy dependency parse to classify:
+      fact       — declarative sentence with an explicit subject
+                   e.g. "Novak is world number 1", "I love Python", "My name is Sachit"
+      assumption — imperative sentence with no subject (command/instruction)
+                   e.g. "Use python instead of JS", "Please convert this image"
+    """
+    doc = _nlp(text)
+    has_subject = any(tok.dep_ in ("nsubj", "nsubjpass") for tok in doc)
+    return "fact" if has_subject else "assumption"

@@ -1,0 +1,178 @@
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
+from dotenv import load_dotenv
+from typing import Optional
+
+from src.services.extract import is_question, categorize
+from src.services.embed import embed
+from src.services.decay import compute_strength
+
+load_dotenv()
+
+router = APIRouter()
+
+DEFAULT_IMPORTANCE = 0.5
+
+
+class MemoryRequest(BaseModel):
+    userId: str
+    content: str
+    importance: float = DEFAULT_IMPORTANCE  # 0.0 (ephemeral) to 1.0 (permanent)
+
+
+class UpdateMemoryRequest(BaseModel):
+    content: str
+    importance: float = DEFAULT_IMPORTANCE
+
+
+def get_conn():
+    return psycopg2.connect(os.getenv("DATABASE_URL"))
+
+
+@router.post("/memories")
+def add_memory(req: MemoryRequest):
+    if is_question(req.content):
+        raise HTTPException(status_code=422, detail="Questions are not stored as memories.")
+
+    category = categorize(req.content)
+    embedding = embed(req.content)
+    embedding_str = f"[{','.join(str(x) for x in embedding)}]"
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO memories (user_id, content, category, importance, embedding)
+        VALUES (%s, %s, %s, %s, %s::vector)
+        ON CONFLICT (user_id, content) DO UPDATE
+            SET recall_count     = memories.recall_count + 1,
+                last_accessed_at = NOW()
+        RETURNING id
+    """, (req.userId, req.content, category, req.importance, embedding_str))
+
+    memory_id = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return {
+        "stored": 1,
+        "id": memory_id,
+        "content": req.content,
+        "category": category,
+    }
+
+
+@router.put("/memories/{memory_id}")
+def update_memory(memory_id: int, req: UpdateMemoryRequest):
+    """
+    Replace the content (and re-embed) of an existing memory.
+    Used by Claude when it decides to merge or override an existing memory.
+    """
+    category = categorize(req.content)
+    embedding = embed(req.content)
+    embedding_str = f"[{','.join(str(x) for x in embedding)}]"
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE memories
+        SET content          = %s,
+            embedding        = %s::vector,
+            category         = %s,
+            importance       = %s,
+            recall_count     = recall_count + 1,
+            last_accessed_at = NOW()
+        WHERE id = %s
+        RETURNING id, content, category, importance
+    """, (req.content, embedding_str, category, req.importance, memory_id))
+
+    row = cur.fetchone()
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Memory {memory_id} not found.")
+
+    return {
+        "updated": 1,
+        "id": row[0],
+        "content": row[1],
+        "category": row[2],
+        "importance": row[3],
+    }
+
+
+@router.get("/memories")
+def list_memories(
+    userId: str = Query(..., description="User whose memories to list"),
+    limit: int = Query(50, ge=1, le=500),
+    category: Optional[str] = Query(None, description="Filter by 'fact' or 'assumption'"),
+):
+    """
+    List all memories for a user with live-computed strength scores.
+    Useful for inspecting, debugging, and building a memory management UI.
+    """
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    sql = """
+        SELECT id, content, category, importance, recall_count,
+               last_accessed_at, created_at
+        FROM memories
+        WHERE user_id = %s
+    """
+    params: list = [userId]
+
+    if category:
+        sql += " AND category = %s"
+        params.append(category)
+
+    sql += " ORDER BY last_accessed_at DESC LIMIT %s"
+    params.append(limit)
+
+    cur.execute(sql, params)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    memories = []
+    for m in rows:
+        strength = compute_strength(
+            last_accessed_at=m["last_accessed_at"],
+            recall_count=m["recall_count"],
+            importance=m["importance"],
+        )
+        memories.append({
+            "id":              m["id"],
+            "content":         m["content"],
+            "category":        m["category"],
+            "importance":      round(m["importance"], 4),
+            "recall_count":    m["recall_count"],
+            "strength":        round(strength, 4),
+            "last_accessed_at": m["last_accessed_at"].isoformat(),
+            "created_at":      m["created_at"].isoformat(),
+        })
+
+    return {"total": len(memories), "memories": memories}
+
+
+@router.delete("/memories/{memory_id}")
+def delete_memory(memory_id: int):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM memories WHERE id = %s RETURNING id", (memory_id,))
+    row = cur.fetchone()
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Memory {memory_id} not found.")
+
+    return {"deleted": 1, "id": memory_id}

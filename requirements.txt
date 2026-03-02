@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+psycopg2-binary
+pgvector
+python-dotenv
+httpx
+apscheduler
+spacy
