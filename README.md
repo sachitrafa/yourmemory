@@ -190,3 +190,17 @@ PostgreSQL (pgvector)
 Benchmarks use the [LoCoMo](https://github.com/snap-research/locomo) dataset by Snap Research — a public long-context memory benchmark for multi-session dialogue.
 
 > Maharana et al. (2024). *LoCoMo: Long Context Multimodal Benchmark for Dialogue.* Snap Research.
+
+---
+
+## License
+
+Copyright (c) 2026 **Sachit Misra**. All rights reserved.
+
+All source code, algorithms, scoring formulas, data structures, and associated documentation in this repository are the exclusive intellectual property of Sachit Misra.
+
+**Non-commercial use only.** Personal, educational, and research use is permitted with attribution. Commercial use — including incorporation into products, SaaS offerings, or revenue-generating services — requires prior written consent.
+
+For commercial licensing: sachitmisra@gmail.com
+
+See [LICENSE](LICENSE) for full terms.
