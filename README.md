@@ -202,6 +202,6 @@ All source code, algorithms, scoring formulas, data structures, and associated d
 
 **Non-commercial use only.** Personal, educational, and research use is permitted with attribution. Commercial use — including incorporation into products, SaaS offerings, or revenue-generating services — requires prior written consent.
 
-For commercial licensing: sachitmisra@gmail.com
+For commercial licensing: mishrasachit1@gmail.com
 
 See [LICENSE](LICENSE) for full terms.
