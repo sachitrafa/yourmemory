@@ -26,7 +26,7 @@ def run():
     cur = conn.cursor(cursor_factory=RealDictCursor)
 
     cur.execute("""
-        SELECT id, memory_type, importance, recall_count, last_accessed_at
+        SELECT id, category, importance, recall_count, last_accessed_at
         FROM memories
     """)
     edges = cur.fetchall()
@@ -39,6 +39,7 @@ def run():
             last_accessed_at=edge["last_accessed_at"],
             recall_count=edge["recall_count"],
             importance=edge["importance"],
+            category=edge["category"],
         )
 
         if strength < PRUNE_THRESHOLD:

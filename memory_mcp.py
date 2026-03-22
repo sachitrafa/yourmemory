@@ -11,6 +11,7 @@ import asyncio
 import json
 import os
 import sys
+import threading
 
 from dotenv import load_dotenv
 from mcp.server import Server
@@ -254,7 +255,23 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         return [types.TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}))]
 
 
+def _start_decay_scheduler():
+    """Run the decay job once immediately, then every 24 hours in a background thread."""
+    from src.jobs.decay_job import run as run_decay
+
+    def loop():
+        run_decay()
+        # Schedule subsequent runs every 24 hours
+        timer = threading.Event()
+        while not timer.wait(timeout=86400):
+            run_decay()
+
+    t = threading.Thread(target=loop, daemon=True, name="decay-scheduler")
+    t.start()
+
+
 async def main():
+    _start_decay_scheduler()
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, server.create_initialization_options())
 
