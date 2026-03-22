@@ -28,21 +28,22 @@ Read the writeup: [I built memory decay for AI agents using the Ebbinghaus forge
 ### Ebbinghaus Forgetting Curve
 
 ```
-effective_λ = 0.16 × (1 - importance × 0.8)
+base_λ      = DECAY_RATES[category]
+effective_λ = base_λ × (1 - importance × 0.8)
 strength    = importance × e^(-effective_λ × days) × (1 + recall_count × 0.2)
 score       = cosine_similarity × strength
 ```
 
-Importance controls both the starting strength and the rate of decay:
+Decay rate varies by **category** — failure memories fade fast, strategies persist longer:
 
-| importance | effective λ | survives without recall |
-|------------|-------------|------------------------|
-| 1.0 | 0.032 | ~94 days |
-| 0.9 | 0.045 | ~64 days |
-| 0.5 | 0.096 | ~24 days |
-| 0.2 | 0.134 | ~10 days |
+| Category | base λ | survives without recall | use case |
+|----------|--------|------------------------|----------|
+| `strategy` | 0.10 | ~38 days | What worked — successful patterns |
+| `fact` | 0.16 | ~24 days | User preferences, identity |
+| `assumption` | 0.20 | ~19 days | Inferred context |
+| `failure` | 0.35 | ~11 days | What went wrong — environment-specific errors |
 
-Memories recalled frequently gain `recall_count` boosts that counteract decay. Memories below strength `0.05` are pruned automatically.
+Importance additionally modulates the decay rate within each category. Memories recalled frequently gain `recall_count` boosts that counteract decay. Memories below strength `0.05` are pruned automatically.
 
 ---
 
@@ -97,8 +98,26 @@ Claude will now follow the recall → store → update workflow automatically on
 | Tool | When to call |
 |------|-------------|
 | `recall_memory` | Start of every task — surface relevant context |
-| `store_memory` | After learning a new preference, fact, or instruction |
+| `store_memory` | After learning a new preference, fact, failure, or strategy |
 | `update_memory` | When a recalled memory is outdated or needs merging |
+
+`store_memory` accepts an optional `category` parameter to control decay rate:
+
+```python
+# Failure — decays in ~11 days (environment changes fast)
+store_memory(
+    content="OAuth for client X fails — redirect URI must be app.example.com",
+    importance=0.6,
+    category="failure"
+)
+
+# Strategy — decays in ~38 days (successful patterns stay relevant)
+store_memory(
+    content="Cursor pagination fixed the 30s timeout on large user queries",
+    importance=0.7,
+    category="strategy"
+)
+```
 
 ### Example session
 
@@ -107,7 +126,7 @@ User: "I prefer tabs over spaces in all my Python projects"
 
 Claude:
   → recall_memory("tabs spaces Python preferences")   # nothing found
-  → store_memory("Sachit prefers tabs over spaces in Python", importance=0.9)
+  → store_memory("Sachit prefers tabs over spaces in Python", importance=0.9, category="fact")
 
 Next session:
   → recall_memory("Python formatting")
@@ -168,9 +187,9 @@ Claude Code
     ├── recall_memory(query)
     │       └── embed → cosine similarity → score = sim × strength → top-k
     │
-    ├── store_memory(content, importance)
+    ├── store_memory(content, importance, category?)
     │       └── is_question? → reject
-    │           categorize() → fact | assumption
+    │           category: fact | assumption | failure | strategy
     │           embed() → INSERT memories
     │
     └── update_memory(id, new_content)
