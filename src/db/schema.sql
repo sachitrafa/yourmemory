@@ -10,9 +10,21 @@ CREATE TABLE IF NOT EXISTS memories (
     last_accessed_at TIMESTAMP DEFAULT NOW(),
     created_at       TIMESTAMP DEFAULT NOW(),
     category         TEXT NOT NULL DEFAULT 'fact',
+    agent_id         TEXT NOT NULL DEFAULT 'user',
+    visibility       TEXT NOT NULL DEFAULT 'shared',
     embedding        vector(768),
     UNIQUE (user_id, content)
 );
+
+-- Add agent_id and visibility to existing tables (safe to run multiple times)
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='memories' AND column_name='agent_id') THEN
+        ALTER TABLE memories ADD COLUMN agent_id TEXT NOT NULL DEFAULT 'user';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='memories' AND column_name='visibility') THEN
+        ALTER TABLE memories ADD COLUMN visibility TEXT NOT NULL DEFAULT 'shared';
+    END IF;
+END $$;
 
 -- ivfflat index is only useful at scale (10k+ rows).
 -- For small datasets, PostgreSQL does an exact scan automatically.
@@ -22,3 +34,4 @@ CREATE TABLE IF NOT EXISTS memories (
 --     WITH (lists = 100);
 
 CREATE INDEX IF NOT EXISTS memories_user_id_idx ON memories (user_id);
+CREATE INDEX IF NOT EXISTS memories_agent_id_idx ON memories (agent_id);

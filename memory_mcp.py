@@ -74,6 +74,10 @@ async def list_tools() -> list[types.Tool]:
                         "type": "string",
                         "description": f"User identifier (default: '{DEFAULT_USER}').",
                     },
+                    "agent_id": {
+                        "type": "string",
+                        "description": "Agent identifier. If provided, returns shared memories + this agent's private memories. If omitted, returns only shared memories.",
+                    },
                     "top_k": {
                         "type": "integer",
                         "description": "Max memories to return (default: 5).",
@@ -121,6 +125,14 @@ async def list_tools() -> list[types.Tool]:
                     "user_id": {
                         "type": "string",
                         "description": f"User identifier (default: '{DEFAULT_USER}').",
+                    },
+                    "agent_id": {
+                        "type": "string",
+                        "description": "Agent identifier storing this memory (default: 'user'). Use your agent name e.g. 'research_agent', 'coding_agent'.",
+                    },
+                    "visibility": {
+                        "type": "string",
+                        "description": "Who can recall this memory: 'shared' (any agent, default) or 'private' (only this agent).",
                     },
                 },
                 "required": ["content", "importance"],
@@ -170,14 +182,19 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     categorize  = _services["categorize"]
 
     if name == "recall_memory":
-        user_id = arguments.get("user_id", DEFAULT_USER)
-        query   = arguments["query"]
-        top_k   = arguments.get("top_k", 5)
-        result  = retrieve(user_id, query, top_k=top_k)
+        user_id  = arguments.get("user_id", DEFAULT_USER)
+        query    = arguments["query"]
+        top_k    = arguments.get("top_k", 5)
+        agent_id = arguments.get("agent_id", None)
+        result   = retrieve(user_id, query, top_k=top_k, agent_id=agent_id)
         return [types.TextContent(type="text", text=json.dumps(result, default=str))]
 
     elif name == "store_memory":
-        user_id = arguments.get("user_id", DEFAULT_USER)
+        user_id    = arguments.get("user_id", DEFAULT_USER)
+        agent_id   = arguments.get("agent_id", "user")
+        visibility = arguments.get("visibility", "shared")
+        if visibility not in ("shared", "private"):
+            visibility = "shared"
         content = arguments["content"]
 
         if is_question(content):
@@ -188,7 +205,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             return [types.TextContent(type="text", text=json.dumps(
                 {"error": "importance is required (0.0–1.0). Decide based on how permanent this memory should be."}))]
         importance    = float(arguments["importance"])
-        importance    = max(0.0, min(1.0, importance))  # clamp to [0, 1]
+        importance    = max(0.0, min(1.0, importance))
         valid_categories = {"fact", "assumption", "failure", "strategy"}
         raw_category  = arguments.get("category", "").strip().lower()
         category      = raw_category if raw_category in valid_categories else categorize(content)
@@ -198,20 +215,21 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         conn = _get_conn()
         cur  = conn.cursor()
         cur.execute("""
-            INSERT INTO memories (user_id, content, category, importance, embedding)
-            VALUES (%s, %s, %s, %s, %s::vector)
+            INSERT INTO memories (user_id, content, category, importance, embedding, agent_id, visibility)
+            VALUES (%s, %s, %s, %s, %s::vector, %s, %s)
             ON CONFLICT (user_id, content) DO UPDATE
                 SET recall_count     = memories.recall_count + 1,
                     last_accessed_at = NOW()
             RETURNING id
-        """, (user_id, content, category, importance, embedding_str))
+        """, (user_id, content, category, importance, embedding_str, agent_id, visibility))
         memory_id = cur.fetchone()[0]
         conn.commit()
         cur.close()
         conn.close()
 
         return [types.TextContent(type="text", text=json.dumps(
-            {"stored": 1, "id": memory_id, "content": content, "category": category, "importance": importance}))]
+            {"stored": 1, "id": memory_id, "content": content, "category": category,
+             "importance": importance, "agent_id": agent_id, "visibility": visibility}))]
 
     elif name == "update_memory":
         memory_id   = arguments["memory_id"]

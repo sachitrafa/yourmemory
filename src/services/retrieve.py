@@ -18,10 +18,12 @@ def get_conn():
     return psycopg2.connect(os.getenv("DATABASE_URL"))
 
 
-def retrieve(user_id: str, query: str, top_k: int = 5) -> dict:
+def retrieve(user_id: str, query: str, top_k: int = 5, agent_id: str = None) -> dict:
     """
     1. Embed the query.
     2. Find candidates by cosine similarity, keeping only those above threshold.
+       - If agent_id is given: return shared memories + this agent's private memories.
+       - If no agent_id: return all shared memories (default behaviour).
     3. Score each candidate: similarity × Ebbinghaus strength.
     4. Update recall_count only for memories that passed the threshold.
     5. Return context string + structured list.
@@ -32,18 +34,33 @@ def retrieve(user_id: str, query: str, top_k: int = 5) -> dict:
     conn = get_conn()
     cur = conn.cursor(cursor_factory=RealDictCursor)
 
-    # Fetch candidates with their cosine similarity score (1 - distance)
-    # Only retrieve rows that exceed the similarity threshold at the DB level
-    cur.execute("""
-        SELECT
-            id, content, category, importance, recall_count, last_accessed_at,
-            1 - (embedding <=> %s::vector) AS similarity
-        FROM memories
-        WHERE user_id = %s
-          AND 1 - (embedding <=> %s::vector) >= %s
-        ORDER BY embedding <=> %s::vector
-        LIMIT %s
-    """, (embedding_str, user_id, embedding_str, SIMILARITY_THRESHOLD, embedding_str, top_k * 2))
+    if agent_id:
+        # Return shared memories + this agent's private memories
+        cur.execute("""
+            SELECT
+                id, content, category, importance, recall_count, last_accessed_at,
+                agent_id, visibility,
+                1 - (embedding <=> %s::vector) AS similarity
+            FROM memories
+            WHERE user_id = %s
+              AND (visibility = 'shared' OR (visibility = 'private' AND agent_id = %s))
+              AND 1 - (embedding <=> %s::vector) >= %s
+            ORDER BY embedding <=> %s::vector
+            LIMIT %s
+        """, (embedding_str, user_id, agent_id, embedding_str, SIMILARITY_THRESHOLD, embedding_str, top_k * 2))
+    else:
+        cur.execute("""
+            SELECT
+                id, content, category, importance, recall_count, last_accessed_at,
+                agent_id, visibility,
+                1 - (embedding <=> %s::vector) AS similarity
+            FROM memories
+            WHERE user_id = %s
+              AND visibility = 'shared'
+              AND 1 - (embedding <=> %s::vector) >= %s
+            ORDER BY embedding <=> %s::vector
+            LIMIT %s
+        """, (embedding_str, user_id, embedding_str, SIMILARITY_THRESHOLD, embedding_str, top_k * 2))
 
     candidates = cur.fetchall()
 
@@ -106,6 +123,8 @@ def retrieve(user_id: str, query: str, top_k: int = 5) -> dict:
                 "id":         m["id"],
                 "content":    m["content"],
                 "category":   m["category"],
+                "agent_id":   m["agent_id"],
+                "visibility": m["visibility"],
                 "importance": round(m["importance"], 4),
                 "strength":   round(m["strength"], 4),
                 "similarity": round(m["similarity"], 4),
