@@ -33,17 +33,13 @@ def _load_services():
     from src.services.retrieve import retrieve as _retrieve
     from src.services.embed import embed
     from src.services.extract import is_question, categorize
-    from src.services.agent_registry import load_registry, is_registered, can_write_visibility, default_visibility, can_read_from
-    _services["psycopg2"]            = psycopg2
-    _services["retrieve"]            = _retrieve
-    _services["embed"]               = embed
-    _services["is_question"]         = is_question
-    _services["categorize"]          = categorize
-    _services["is_registered"]       = is_registered
-    _services["can_write_visibility"] = can_write_visibility
-    _services["default_visibility"]  = default_visibility
-    _services["can_read_from"]       = can_read_from
-    load_registry()
+    from src.services.api_keys import validate_api_key
+    _services["psycopg2"]          = psycopg2
+    _services["retrieve"]          = _retrieve
+    _services["embed"]             = embed
+    _services["is_question"]       = is_question
+    _services["categorize"]        = categorize
+    _services["validate_api_key"]  = validate_api_key
 
 DEFAULT_USER = "sachit"
 DEFAULT_IMPORTANCE = 0.5
@@ -80,9 +76,9 @@ async def list_tools() -> list[types.Tool]:
                         "type": "string",
                         "description": f"User identifier (default: '{DEFAULT_USER}').",
                     },
-                    "agent_id": {
+                    "api_key": {
                         "type": "string",
-                        "description": "Agent identifier. If provided, returns shared memories + this agent's private memories. If omitted, returns only shared memories.",
+                        "description": "Agent API key (starts with 'ym_'). If provided, also returns this agent's private memories. If omitted, returns shared memories only.",
                     },
                     "top_k": {
                         "type": "integer",
@@ -132,9 +128,9 @@ async def list_tools() -> list[types.Tool]:
                         "type": "string",
                         "description": f"User identifier (default: '{DEFAULT_USER}').",
                     },
-                    "agent_id": {
+                    "api_key": {
                         "type": "string",
-                        "description": "Agent identifier storing this memory (default: 'user'). Use your agent name e.g. 'research_agent', 'coding_agent'.",
+                        "description": "Agent API key (starts with 'ym_'). Required for agent-scoped memory. If omitted, stored as 'user' with shared visibility.",
                     },
                     "visibility": {
                         "type": "string",
@@ -182,55 +178,62 @@ async def list_tools() -> list[types.Tool]:
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     _load_services()
-    retrieve             = _services["retrieve"]
-    embed                = _services["embed"]
-    is_question          = _services["is_question"]
-    categorize           = _services["categorize"]
-    is_registered        = _services["is_registered"]
-    can_write_visibility = _services["can_write_visibility"]
-    default_visibility   = _services["default_visibility"]
-    can_read_from        = _services["can_read_from"]
+    retrieve          = _services["retrieve"]
+    embed             = _services["embed"]
+    is_question       = _services["is_question"]
+    categorize        = _services["categorize"]
+    validate_api_key  = _services["validate_api_key"]
 
     if name == "recall_memory":
-        user_id  = arguments.get("user_id", DEFAULT_USER)
-        query    = arguments["query"]
-        top_k    = arguments.get("top_k", 5)
-        agent_id = arguments.get("agent_id", None)
+        user_id = arguments.get("user_id", DEFAULT_USER)
+        query   = arguments["query"]
+        top_k   = arguments.get("top_k", 5)
+        api_key = arguments.get("api_key")
 
-        # Validate agent if provided
-        if agent_id and not is_registered(agent_id):
-            return [types.TextContent(type="text", text=json.dumps(
-                {"error": f"Unknown agent '{agent_id}'. Register it in agents/{agent_id}.md first."}))]
+        agent = None
+        if api_key:
+            agent = validate_api_key(api_key)
+            if not agent:
+                return [types.TextContent(type="text", text=json.dumps(
+                    {"error": "Invalid or revoked API key."}))]
 
-        result = retrieve(user_id, query, top_k=top_k, agent_id=agent_id)
+        agent_id = agent["agent_id"] if agent else None
+        result   = retrieve(user_id, query, top_k=top_k, agent_id=agent_id)
 
-        # Filter by can_read if agent is registered
-        if agent_id:
-            result["memories"] = [
-                m for m in result["memories"]
-                if can_read_from(agent_id, m["agent_id"])
-            ]
-            result["memoriesFound"] = len(result["memories"])
+        # Filter by can_read rules from the registration
+        if agent:
+            can_read = agent.get("can_read", [])
+            if can_read:
+                result["memories"] = [
+                    m for m in result["memories"]
+                    if m["agent_id"] in can_read
+                ]
+                result["memoriesFound"] = len(result["memories"])
 
         return [types.TextContent(type="text", text=json.dumps(result, default=str))]
 
     elif name == "store_memory":
-        user_id  = arguments.get("user_id", DEFAULT_USER)
-        agent_id = arguments.get("agent_id", "user")
+        user_id = arguments.get("user_id", DEFAULT_USER)
+        api_key = arguments.get("api_key")
 
-        # Validate agent
-        if not is_registered(agent_id):
-            return [types.TextContent(type="text", text=json.dumps(
-                {"error": f"Unknown agent '{agent_id}'. Register it in agents/{agent_id}.md first."}))]
+        # Resolve agent identity from API key
+        if api_key:
+            agent = validate_api_key(api_key)
+            if not agent:
+                return [types.TextContent(type="text", text=json.dumps(
+                    {"error": "Invalid or revoked API key."}))]
+            agent_id = agent["agent_id"]
+            can_write = agent.get("can_write", ["shared", "private"])
+        else:
+            agent_id  = "user"
+            can_write = ["shared", "private"]
 
-        visibility = arguments.get("visibility", default_visibility(agent_id))
+        visibility = arguments.get("visibility", "shared")
         if visibility not in ("shared", "private"):
-            visibility = default_visibility(agent_id)
-
-        # Check agent is allowed to write this visibility level
-        if not can_write_visibility(agent_id, visibility):
+            visibility = "shared"
+        if visibility not in can_write:
             return [types.TextContent(type="text", text=json.dumps(
-                {"error": f"Agent '{agent_id}' is not allowed to write '{visibility}' memories."}))]
+                {"error": f"Agent '{agent_id}' is not permitted to write '{visibility}' memories."}))]
 
         content = arguments["content"]
 

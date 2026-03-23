@@ -35,3 +35,19 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS memories_user_id_idx ON memories (user_id);
 CREATE INDEX IF NOT EXISTS memories_agent_id_idx ON memories (agent_id);
+
+-- Agent registrations — API key auth for multi-agent systems
+CREATE TABLE IF NOT EXISTS agent_registrations (
+    id          SERIAL PRIMARY KEY,
+    agent_id    TEXT UNIQUE NOT NULL,
+    user_id     TEXT NOT NULL,
+    api_key_hash TEXT UNIQUE NOT NULL,   -- SHA-256 hash, never store plaintext
+    can_read    TEXT[] DEFAULT '{}',     -- agent_ids this agent can read from (empty = all shared)
+    can_write   TEXT[] DEFAULT ARRAY['shared', 'private'],
+    description TEXT DEFAULT '',
+    created_at  TIMESTAMP DEFAULT NOW(),
+    revoked_at  TIMESTAMP               -- NULL = active
+);
+
+CREATE INDEX IF NOT EXISTS agent_reg_user_id_idx ON agent_registrations (user_id);
+CREATE INDEX IF NOT EXISTS agent_reg_api_key_idx ON agent_registrations (api_key_hash);
