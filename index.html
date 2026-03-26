@@ -279,67 +279,28 @@
             <div class="grid md:grid-cols-3 gap-4 mb-8">
                 <div class="card p-5 text-center">
                     <div class="text-3xl font-bold text-indigo-400 mb-1">34%</div>
-                    <div class="text-xs text-slate-400">Cognitive AI Recall@5</div>
+                    <div class="text-xs text-slate-400">Cognitive AI — Recall@5</div>
                 </div>
                 <div class="card p-5 text-center">
-                    <div class="text-3xl font-bold text-slate-300 mb-1">9 / 10</div>
-                    <div class="text-xs text-slate-400">samples won vs both competitors</div>
+                    <div class="text-3xl font-bold text-slate-500 mb-1">22%</div>
+                    <div class="text-xs text-slate-400">Zep Cloud — Recall@5</div>
                 </div>
                 <div class="card p-5 text-center">
-                    <div class="text-3xl font-bold text-indigo-400 mb-1">0</div>
-                    <div class="text-xs text-slate-400">LLM calls at retrieval</div>
+                    <div class="text-3xl font-bold text-slate-500 mb-1">18%</div>
+                    <div class="text-xs text-slate-400">Mem0 — Recall@5</div>
                 </div>
             </div>
 
-            <!-- Per-sample table -->
+            <!-- Metric tradeoff table -->
             <div class="card overflow-hidden mb-6">
                 <div class="px-5 py-4 border-b border-white/5">
-                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Recall@5 per conversation pair</span>
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">10 conversations · 1,534 QA pairs · Recall@5</span>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="benchmark-table w-full">
                         <thead>
                             <tr>
-                                <th>Speakers</th>
-                                <th>QA pairs</th>
-                                <th>Cognitive AI</th>
-                                <th>Zep Cloud</th>
-                                <th>Mem0</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr><td>Caroline & Melanie</td><td class="text-slate-500">146</td><td class="winner">29%</td><td class="loser">24%</td><td class="loser">35%</td></tr>
-                            <tr><td>Jon & Gina</td><td class="text-slate-500">81</td><td class="winner">46%</td><td class="loser">46%</td><td class="loser">5%</td></tr>
-                            <tr><td>John & Maria</td><td class="text-slate-500">152</td><td class="winner">25%</td><td class="loser">22%</td><td class="loser">15%</td></tr>
-                            <tr><td>Joanna & Nate</td><td class="text-slate-500">199</td><td class="winner">38%</td><td class="loser">18%</td><td class="loser">5%</td></tr>
-                            <tr><td>Tim & John</td><td class="text-slate-500">178</td><td class="winner">31%</td><td class="loser">24%</td><td class="loser">10%</td></tr>
-                            <tr><td>Audrey & Andrew</td><td class="text-slate-500">123</td><td class="winner">36%</td><td class="loser">20%</td><td class="loser">25%</td></tr>
-                            <tr><td>James & John</td><td class="text-slate-500">150</td><td class="winner">38%</td><td class="loser">23%</td><td class="loser">15%</td></tr>
-                            <tr><td>Deborah & Jolene</td><td class="text-slate-500">191</td><td class="winner">25%</td><td class="loser">16%</td><td class="loser">10%</td></tr>
-                            <tr><td>Evan & Sam</td><td class="text-slate-500">156</td><td class="winner">35%</td><td class="loser">18%</td><td class="loser">20%</td></tr>
-                            <tr><td>Calvin & Dave</td><td class="text-slate-500">158</td><td class="winner">41%</td><td class="loser">26%</td><td class="loser">45%</td></tr>
-                            <tr class="border-t border-white/10">
-                                <td class="font-semibold text-slate-200">Total</td>
-                                <td class="text-slate-400 font-semibold">1,534</td>
-                                <td class="text-indigo-400 font-bold">34%</td>
-                                <td class="text-slate-500 font-semibold">22%</td>
-                                <td class="text-slate-500 font-semibold">18%</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Infrastructure comparison -->
-            <div class="card overflow-hidden mb-6">
-                <div class="px-5 py-4 border-b border-white/5">
-                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Infrastructure cost to achieve these results</span>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="benchmark-table w-full">
-                        <thead>
-                            <tr>
-                                <th>Capability</th>
+                                <th>Metric</th>
                                 <th>Cognitive AI</th>
                                 <th>Zep Cloud</th>
                                 <th>Mem0</th>
@@ -347,15 +308,27 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td class="text-slate-400">LLM calls on retrieval</td>
+                                <td class="text-slate-400">Recall@5 (LoCoMo)</td>
+                                <td class="winner">34%</td>
+                                <td class="loser">22%</td>
+                                <td class="loser">18%</td>
+                            </tr>
+                            <tr>
+                                <td class="text-slate-400">Samples won</td>
+                                <td class="winner">9 / 10</td>
+                                <td class="loser">—</td>
+                                <td class="loser">—</td>
+                            </tr>
+                            <tr>
+                                <td class="text-slate-400">LLM calls at retrieval</td>
                                 <td class="winner">None</td>
-                                <td class="loser">GPT-4 (synthesis)</td>
+                                <td class="loser">GPT-4</td>
                                 <td class="loser">Yes</td>
                             </tr>
                             <tr>
-                                <td class="text-slate-400">LLM calls on ingestion</td>
+                                <td class="text-slate-400">LLM calls at ingestion</td>
                                 <td class="winner">None</td>
-                                <td class="loser">GPT-4 (extraction)</td>
+                                <td class="loser">GPT-4</td>
                                 <td class="loser">Yes</td>
                             </tr>
                             <tr>
