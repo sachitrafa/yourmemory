@@ -162,7 +162,7 @@
                 </div>
                 <span class="font-semibold text-sm text-slate-800">Cognitive AI Memory</span>
             </div>
-            <div class="hidden md:flex items-center gap-6 text-sm text-slate-500">
+            <div class="hidden md:flex items-center gap-6 text-sm text-slate-600">
                 <a href="#features" class="hover:text-slate-900 transition-colors">Features</a>
                 <a href="#benchmarks" class="hover:text-slate-900 transition-colors">Benchmarks</a>
                 <a href="#setup" class="hover:text-slate-900 transition-colors">Setup</a>
@@ -188,7 +188,7 @@
                 <span class="text-indigo-500 italic">modelled on how humans forget.</span>
             </h1>
 
-            <p class="text-base text-slate-500 max-w-xl mx-auto mb-8 leading-relaxed">
+            <p class="text-base text-slate-600 max-w-xl mx-auto mb-8 leading-relaxed">
                 Cognitive AI Memory uses the Ebbinghaus forgetting curve to score, decay, and reinforce memories over time — so your AI always surfaces what matters most, not just what was stored last.
             </p>
 
@@ -197,9 +197,9 @@
                     Get started
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                 </a>
-                <div class="font-mono text-sm text-slate-400 flex items-center gap-2 px-4 py-3 card">
-                    <span class="text-indigo-400">$</span> docker compose up -d
-                    <button onclick="copyCmd('docker compose up -d')" class="ml-2 text-slate-500 hover:text-slate-300 transition-colors">
+                <div class="font-mono text-sm text-slate-600 flex items-center gap-2 px-4 py-3 card">
+                    <span class="text-indigo-600">$</span> docker compose up -d
+                    <button onclick="copyCmd('docker compose up -d')" class="ml-2 text-slate-600 hover:text-slate-700 transition-colors">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                     </button>
                 </div>
@@ -211,12 +211,12 @@
                     <div class="w-2.5 h-2.5 rounded-full bg-slate-200"></div>
                     <div class="w-2.5 h-2.5 rounded-full bg-slate-200"></div>
                     <div class="w-2.5 h-2.5 rounded-full bg-slate-200"></div>
-                    <span class="ml-3 text-xs text-slate-400 font-mono">memory-server</span>
+                    <span class="ml-3 text-xs text-slate-600 font-mono">memory-server</span>
                 </div>
                 <div class="p-5 font-mono text-sm space-y-3">
-                    <div class="text-slate-400 text-xs"># storing a new memory</div>
+                    <div class="text-slate-600 text-xs"># storing a new memory</div>
                     <div class="text-indigo-600">store_memory("Sachit is switching from React to Vue.js")</div>
-                    <div class="text-slate-400 text-xs mt-3"># 45 days later — query fires</div>
+                    <div class="text-slate-600 text-xs mt-3"># 45 days later — query fires</div>
                     <div class="text-slate-700">recall_memory("what frontend framework does Sachit use?")</div>
                     <div class="mt-2 space-y-1.5">
                         <div class="flex items-center gap-3 p-2.5 rounded bg-green-50 border border-green-100">
@@ -225,58 +225,58 @@
                         </div>
                         <div class="flex items-center gap-3 p-2.5 rounded bg-slate-50 border border-slate-100">
                             <span class="tag-red">score 0.04</span>
-                            <span class="text-slate-400 text-xs line-through">Sachit uses React for frontend</span>
+                            <span class="text-slate-600 text-xs line-through">Sachit uses React for frontend</span>
                         </div>
                     </div>
-                    <div class="text-slate-400 text-xs pt-1">decay pruned 1 stale memory · 2 results returned</div>
+                    <div class="text-slate-600 text-xs pt-1">decay pruned 1 stale memory · 2 results returned</div>
                 </div>
             </div>
         </div>
     </header>
 
     <!-- Features -->
-    <section id="features" class="py-20 px-6 border-t border-white/5">
+    <section id="features" class="py-20 px-6 border-t border-slate-100">
         <div class="max-w-5xl mx-auto">
             <div class="text-center mb-12">
                 <div class="section-label">How it works</div>
                 <h2 class="text-2xl font-bold mb-3 text-slate-900">Memory that ages gracefully</h2>
-                <p class="text-slate-500 text-sm max-w-lg mx-auto">Not a vector database. Not a chat log. A cognitive memory layer that knows what to keep and what to let go.</p>
+                <p class="text-slate-600 text-sm max-w-lg mx-auto">Not a vector database. Not a chat log. A cognitive memory layer that knows what to keep and what to let go.</p>
             </div>
 
             <div class="grid md:grid-cols-3 gap-5">
                 <div class="card p-6">
                     <div class="w-8 h-8 rounded-lg bg-indigo-600/15 flex items-center justify-center mb-4">
-                        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/></svg>
+                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/></svg>
                     </div>
                     <h3 class="font-semibold mb-2 text-sm">Ebbinghaus Decay</h3>
-                    <p class="text-slate-400 text-sm leading-relaxed">Memories fade over time using the forgetting curve. Recalled memories get reinforced. Unused ones quietly expire.</p>
+                    <p class="text-slate-600 text-sm leading-relaxed">Memories fade over time using the forgetting curve. Recalled memories get reinforced. Unused ones quietly expire.</p>
                 </div>
                 <div class="card p-6">
                     <div class="w-8 h-8 rounded-lg bg-indigo-600/15 flex items-center justify-center mb-4">
-                        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
                     </div>
                     <h3 class="font-semibold mb-2 text-sm">Fully Local</h3>
-                    <p class="text-slate-400 text-sm leading-relaxed">Runs on your machine via Docker. No external API calls for retrieval. Your data never leaves your infrastructure.</p>
+                    <p class="text-slate-600 text-sm leading-relaxed">Runs on your machine via Docker. No external API calls for retrieval. Your data never leaves your infrastructure.</p>
                 </div>
                 <div class="card p-6">
                     <div class="w-8 h-8 rounded-lg bg-indigo-600/15 flex items-center justify-center mb-4">
-                        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                     </div>
                     <h3 class="font-semibold mb-2 text-sm">MCP Native</h3>
-                    <p class="text-slate-400 text-sm leading-relaxed">Works out of the box with Claude Code and any MCP-compatible agent. Three tools: <code>store</code>, <code>recall</code>, <code>update</code>.</p>
+                    <p class="text-slate-600 text-sm leading-relaxed">Works out of the box with Claude Code and any MCP-compatible agent. Three tools: <code>store</code>, <code>recall</code>, <code>update</code>.</p>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- Benchmarks -->
-    <section id="benchmarks" class="py-20 px-6 border-t border-white/5">
+    <section id="benchmarks" class="py-20 px-6 border-t border-slate-100">
         <div class="max-w-5xl mx-auto">
             <div class="text-center mb-12">
                 <div class="section-label">Benchmarks</div>
                 <h2 class="text-2xl font-bold mb-3 text-slate-900">Evaluated on LoCoMo</h2>
-                <p class="text-slate-500 text-sm max-w-xl mx-auto">
-                    LoCoMo is a public benchmark by Snap Research — 10 real multi-session conversations spanning weeks to months, 272 sessions, 1,534 QA pairs. Metric: <strong class="text-slate-300">Recall@5</strong> — does the correct answer appear in the top 5 retrieved results?
+                <p class="text-slate-600 text-sm max-w-xl mx-auto">
+                    LoCoMo is a public benchmark by Snap Research — 10 real multi-session conversations spanning weeks to months, 272 sessions, 1,534 QA pairs. Metric: <strong class="text-slate-700">Recall@5</strong> — does the correct answer appear in the top 5 retrieved results?
                 </p>
             </div>
 
@@ -284,22 +284,22 @@
             <div class="grid md:grid-cols-3 gap-4 mb-8">
                 <div class="card p-5 text-center">
                     <div class="text-3xl font-bold text-indigo-600 mb-1">34%</div>
-                    <div class="text-xs text-slate-500">Cognitive AI — Recall@5</div>
+                    <div class="text-xs text-slate-600">Cognitive AI — Recall@5</div>
                 </div>
                 <div class="card p-5 text-center">
-                    <div class="text-3xl font-bold text-slate-400 mb-1">22%</div>
-                    <div class="text-xs text-slate-500">Zep Cloud — Recall@5</div>
+                    <div class="text-3xl font-bold text-slate-600 mb-1">22%</div>
+                    <div class="text-xs text-slate-600">Zep Cloud — Recall@5</div>
                 </div>
                 <div class="card p-5 text-center">
-                    <div class="text-3xl font-bold text-slate-400 mb-1">18%</div>
-                    <div class="text-xs text-slate-500">Mem0 — Recall@5</div>
+                    <div class="text-3xl font-bold text-slate-600 mb-1">18%</div>
+                    <div class="text-xs text-slate-600">Mem0 — Recall@5</div>
                 </div>
             </div>
 
             <!-- Metric tradeoff table -->
             <div class="card overflow-hidden mb-6">
-                <div class="px-5 py-4 border-b border-white/5">
-                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">10 conversations · 1,534 QA pairs · Recall@5</span>
+                <div class="px-5 py-4 border-b border-slate-100">
+                    <span class="text-xs font-semibold text-slate-600 uppercase tracking-wider">10 conversations · 1,534 QA pairs · Recall@5</span>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="benchmark-table w-full">
@@ -313,43 +313,43 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td class="text-slate-400">Recall@5 (LoCoMo)</td>
+                                <td class="text-slate-600">Recall@5 (LoCoMo)</td>
                                 <td class="winner">34%</td>
                                 <td class="loser">22%</td>
                                 <td class="loser">18%</td>
                             </tr>
                             <tr>
-                                <td class="text-slate-400">Samples won</td>
+                                <td class="text-slate-600">Samples won</td>
                                 <td class="winner">9 / 10</td>
                                 <td class="loser">—</td>
                                 <td class="loser">—</td>
                             </tr>
                             <tr>
-                                <td class="text-slate-400">LLM calls at retrieval</td>
+                                <td class="text-slate-600">LLM calls at retrieval</td>
                                 <td class="winner">None</td>
                                 <td class="loser">GPT-4</td>
                                 <td class="loser">Yes</td>
                             </tr>
                             <tr>
-                                <td class="text-slate-400">LLM calls at ingestion</td>
+                                <td class="text-slate-600">LLM calls at ingestion</td>
                                 <td class="winner">None</td>
                                 <td class="loser">GPT-4</td>
                                 <td class="loser">Yes</td>
                             </tr>
                             <tr>
-                                <td class="text-slate-400">Storage architecture</td>
+                                <td class="text-slate-600">Storage architecture</td>
                                 <td class="winner">PostgreSQL + pgvector</td>
                                 <td class="loser">pgvector + knowledge graph</td>
                                 <td class="loser">Managed cloud</td>
                             </tr>
                             <tr>
-                                <td class="text-slate-400">Data privacy</td>
+                                <td class="text-slate-600">Data privacy</td>
                                 <td class="winner">Fully local</td>
                                 <td class="loser">Sent to OpenAI</td>
                                 <td class="loser">Sent to Mem0 cloud</td>
                             </tr>
                             <tr>
-                                <td class="text-slate-400">Ingestion latency</td>
+                                <td class="text-slate-600">Ingestion latency</td>
                                 <td class="winner">Instant</td>
                                 <td class="loser">20–25s (async LLM)</td>
                                 <td class="loser">Varies</td>
@@ -359,23 +359,23 @@
                 </div>
             </div>
 
-            <p class="text-xs text-slate-500 text-center">
+            <p class="text-xs text-slate-600 text-center">
                 Full methodology and per-sample results at <a href="https://github.com/sachitrafa/cognitive-ai-memory/blob/main/BENCHMARKS.md" class="text-indigo-400 hover:underline" target="_blank">BENCHMARKS.md</a>. Dataset: <a href="https://github.com/snap-research/locomo" class="text-indigo-400 hover:underline" target="_blank">LoCoMo by Snap Research</a>.
             </p>
         </div>
     </section>
 
     <!-- How it works / Formula -->
-    <section id="how-it-works" class="py-20 px-6 border-t border-white/5">
+    <section id="how-it-works" class="py-20 px-6 border-t border-slate-100">
         <div class="max-w-5xl mx-auto">
             <div class="grid md:grid-cols-2 gap-12 items-center">
                 <div>
                     <div class="section-label">Scoring formula</div>
                     <h2 class="text-2xl font-bold mb-4 text-slate-900">Relevance × recency</h2>
-                    <p class="text-slate-500 text-sm leading-relaxed mb-6">
+                    <p class="text-slate-600 text-sm leading-relaxed mb-6">
                         Every retrieval combines semantic similarity with a biological memory model. Memories that haven't been accessed in a long time receive a lower strength score — and are pruned entirely once they fall below the threshold.
                     </p>
-                    <ul class="space-y-2 text-sm text-slate-500">
+                    <ul class="space-y-2 text-sm text-slate-600">
                         <li class="flex gap-2"><span class="text-indigo-500 mt-0.5">→</span> <span><strong class="text-slate-700">importance</strong> — set at store time (0–1)</span></li>
                         <li class="flex gap-2"><span class="text-indigo-500 mt-0.5">→</span> <span><strong class="text-slate-700">λ_eff</strong> — decay rate, modulated by importance</span></li>
                         <li class="flex gap-2"><span class="text-indigo-500 mt-0.5">→</span> <span><strong class="text-slate-700">recall_count</strong> — reinforced on every access</span></li>
@@ -383,13 +383,13 @@
                     </ul>
                 </div>
                 <div class="formula-box">
-                    <div class="text-slate-400 text-xs mb-3"># retrieval score</div>
+                    <div class="text-slate-600 text-xs mb-3"># retrieval score</div>
                     score = cosine_sim × strength<br/><br/>
-                    <div class="text-slate-500 text-xs mb-3"># ebbinghaus strength</div>
+                    <div class="text-slate-600 text-xs mb-3"># ebbinghaus strength</div>
                     strength = importance<br/>
                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;× exp(−λ_eff × days)<br/>
                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;× (1 + recall_count × 0.2)<br/><br/>
-                    <div class="text-slate-500 text-xs mb-3"># adaptive decay rate</div>
+                    <div class="text-slate-600 text-xs mb-3"># adaptive decay rate</div>
                     λ_eff = 0.16 × (1 − importance × 0.8)
                 </div>
             </div>
@@ -397,28 +397,28 @@
     </section>
 
     <!-- Setup -->
-    <section id="setup" class="py-20 px-6 border-t border-white/5">
+    <section id="setup" class="py-20 px-6 border-t border-slate-100">
         <div class="max-w-2xl mx-auto">
             <div class="text-center mb-10">
                 <div class="section-label">Setup</div>
                 <h2 class="text-2xl font-bold mb-3 text-slate-900">Up and running in two steps</h2>
-                <p class="text-slate-500 text-sm">Requires Docker and Ollama with <code>nomic-embed-text</code> pulled.</p>
+                <p class="text-slate-600 text-sm">Requires Docker and Ollama with <code>nomic-embed-text</code> pulled.</p>
             </div>
 
             <div class="space-y-4">
                 <div class="card p-5">
-                    <div class="text-xs font-semibold text-indigo-400 mb-3 font-mono">1. Start the server</div>
-                    <div class="flex items-center justify-between bg-black/40 rounded p-3 font-mono text-xs text-slate-300 border border-white/5">
-                        <code class="bg-transparent border-0 p-0 text-slate-300">git clone https://github.com/sachitrafa/cognitive-ai-memory.git && cd cognitive-ai-memory && docker compose up -d</code>
-                        <button onclick="copyCmd('git clone https://github.com/sachitrafa/cognitive-ai-memory.git && cd cognitive-ai-memory && docker compose up -d')" class="ml-3 text-slate-500 hover:text-slate-300 flex-shrink-0">
+                    <div class="text-xs font-semibold text-indigo-600 mb-3 font-mono">1. Start the server</div>
+                    <div class="flex items-center justify-between bg-slate-50 rounded p-3 font-mono text-xs text-slate-700 border border-slate-200">
+                        <code class="bg-transparent border-0 p-0 text-slate-700">git clone https://github.com/sachitrafa/cognitive-ai-memory.git && cd cognitive-ai-memory && docker compose up -d</code>
+                        <button onclick="copyCmd('git clone https://github.com/sachitrafa/cognitive-ai-memory.git && cd cognitive-ai-memory && docker compose up -d')" class="ml-3 text-slate-600 hover:text-slate-700 flex-shrink-0">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                         </button>
                     </div>
                 </div>
 
                 <div class="card p-5">
-                    <div class="text-xs font-semibold text-indigo-400 mb-3 font-mono">2. Add to Claude (claude_desktop_config.json)</div>
-                    <div class="bg-black/40 rounded p-3 font-mono text-xs text-slate-400 border border-white/5 leading-relaxed">
+                    <div class="text-xs font-semibold text-indigo-600 mb-3 font-mono">2. Add to Claude (claude_desktop_config.json)</div>
+                    <div class="bg-slate-50 rounded p-3 font-mono text-xs text-slate-600 border border-slate-200 leading-relaxed">
                         {<br/>
                         &nbsp;&nbsp;"mcpServers": {<br/>
                         &nbsp;&nbsp;&nbsp;&nbsp;"cognitive-memory": {<br/>
@@ -440,11 +440,11 @@
     </section>
 
     <!-- Footer -->
-    <footer class="py-10 border-t border-white/5 px-6">
-        <div class="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-slate-400">
+    <footer class="py-10 border-t border-slate-100 px-6">
+        <div class="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-slate-600">
             <span class="font-semibold text-slate-600">Cognitive AI Memory</span>
             <p>Built by <a href="https://github.com/sachitrafa" class="hover:text-slate-900 transition-colors">sachitrafa</a> · Open source under MIT</p>
-            <a href="https://github.com/sachitrafa/cognitive-ai-memory" class="hover:text-white transition-colors">
+            <a href="https://github.com/sachitrafa/cognitive-ai-memory" class="hover:text-slate-900 transition-colors">
                 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
             </a>
         </div>
