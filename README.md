@@ -49,18 +49,50 @@ Importance additionally modulates the decay rate within each category. Memories 
 
 ## Setup
 
-**Prerequisites:**
-- [Docker](https://docs.docker.com/get-docker/) — runs Postgres
+No Docker required. Uses your local PostgreSQL.
 
-**Install and start:**
+### 1. Install PostgreSQL + pgvector
+
+**macOS**
+```bash
+brew install postgresql@16 pgvector
+brew services start postgresql@16
+```
+
+**Ubuntu / Debian**
+```bash
+sudo apt install postgresql postgresql-contrib
+sudo apt install postgresql-16-pgvector   # adjust version to match yours
+```
+
+**Windows** — download the installer from [postgresql.org](https://www.postgresql.org/download/windows/), then install the [pgvector extension](https://github.com/pgvector/pgvector).
+
+### 2. Clone and configure
 
 ```bash
 git clone https://github.com/sachitrafa/cognitive-ai-memory
 cd cognitive-ai-memory
-./setup.sh
+pip install -r requirements.txt
+python -m spacy download en_core_web_sm
 ```
 
-The script pulls the embedding model, installs the Python package, creates your `.env`, and starts Postgres. DB migration and the decay scheduler run automatically on first boot.
+Create a `.env` file:
+```bash
+DATABASE_URL=postgresql://YOUR_USER@localhost:5432/yourmemory
+```
+
+Replace `YOUR_USER` with your system username (run `whoami` to check).
+
+### 3. Create the database and start
+
+```bash
+createdb yourmemory
+python main.py
+```
+
+Migration and the decay scheduler run automatically on first boot.
+
+> **One-liner setup script** (macOS/Linux): `bash scripts/setup_db.sh` handles steps 1–3 automatically.
 
 **Start the MCP server:**
 
