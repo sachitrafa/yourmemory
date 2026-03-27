@@ -1,46 +1,72 @@
-import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import json
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 from .embed import embed
 from .decay import compute_strength
+from src.db.connection import get_backend, get_conn
 
 load_dotenv()
 
-# Memories below this are excluded from results entirely
+# Memories below this similarity are excluded from results
 SIMILARITY_THRESHOLD = 0.50
-# Memories must exceed this to get recall_count reinforced
-REINFORCE_THRESHOLD = 0.75
+# Memories above this similarity get recall_count reinforced
+REINFORCE_THRESHOLD  = 0.75
 
 
-def get_conn():
-    return psycopg2.connect(os.getenv("DATABASE_URL"))
+def _parse_dt(value) -> datetime:
+    """Normalize last_accessed_at to a UTC-aware datetime."""
+    if isinstance(value, str):
+        try:
+            dt = datetime.fromisoformat(value)
+        except ValueError:
+            return datetime.now(timezone.utc)
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+    return datetime.now(timezone.utc)
+
+
+def _cosine(a: list, b: list) -> float:
+    import numpy as np
+    va, vb = np.array(a, dtype=float), np.array(b, dtype=float)
+    denom = np.linalg.norm(va) * np.linalg.norm(vb)
+    return float(np.dot(va, vb) / denom) if denom else 0.0
 
 
 def retrieve(user_id: str, query: str, top_k: int = 5, agent_id: str = None) -> dict:
     """
     1. Embed the query.
-    2. Find candidates by cosine similarity, keeping only those above threshold.
-       - If agent_id is given: return shared memories + this agent's private memories.
-       - If no agent_id: return all shared memories (default behaviour).
-    3. Score each candidate: similarity × Ebbinghaus strength.
-    4. Update recall_count only for memories that passed the threshold.
+    2. Find candidates by cosine similarity above threshold.
+       - Postgres: pgvector operator
+       - SQLite: Python cosine similarity over all user memories
+    3. Score each: similarity × Ebbinghaus strength.
+    4. Reinforce high-scoring memories (bump recall_count).
     5. Return context string + structured list.
     """
     query_embedding = embed(query)
-    embedding_str = f"[{','.join(str(x) for x in query_embedding)}]"
+    backend = get_backend()
 
+    if backend == "postgres":
+        return _retrieve_postgres(user_id, query_embedding, top_k, agent_id)
+    return _retrieve_sqlite(user_id, query_embedding, top_k, agent_id)
+
+
+# ── Postgres path ─────────────────────────────────────────────────────────────
+
+def _retrieve_postgres(user_id, query_embedding, top_k, agent_id):
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+
+    embedding_str = f"[{','.join(str(x) for x in query_embedding)}]"
     conn = get_conn()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur  = conn.cursor(cursor_factory=RealDictCursor)
 
     if agent_id:
-        # Return shared memories + this agent's private memories
         cur.execute("""
-            SELECT
-                id, content, category, importance, recall_count, last_accessed_at,
-                agent_id, visibility,
-                1 - (embedding <=> %s::vector) AS similarity
+            SELECT id, content, category, importance, recall_count, last_accessed_at,
+                   agent_id, visibility,
+                   1 - (embedding <=> %s::vector) AS similarity
             FROM memories
             WHERE user_id = %s
               AND (visibility = 'shared' OR (visibility = 'private' AND agent_id = %s))
@@ -50,10 +76,9 @@ def retrieve(user_id: str, query: str, top_k: int = 5, agent_id: str = None) -> 
         """, (embedding_str, user_id, agent_id, embedding_str, SIMILARITY_THRESHOLD, embedding_str, top_k * 2))
     else:
         cur.execute("""
-            SELECT
-                id, content, category, importance, recall_count, last_accessed_at,
-                agent_id, visibility,
-                1 - (embedding <=> %s::vector) AS similarity
+            SELECT id, content, category, importance, recall_count, last_accessed_at,
+                   agent_id, visibility,
+                   1 - (embedding <=> %s::vector) AS similarity
             FROM memories
             WHERE user_id = %s
               AND visibility = 'shared'
@@ -62,20 +87,58 @@ def retrieve(user_id: str, query: str, top_k: int = 5, agent_id: str = None) -> 
             LIMIT %s
         """, (embedding_str, user_id, embedding_str, SIMILARITY_THRESHOLD, embedding_str, top_k * 2))
 
-    candidates = cur.fetchall()
+    candidates = [dict(row) for row in cur.fetchall()]
+    return _score_and_return(candidates, top_k, cur, conn, backend="postgres")
 
+
+# ── SQLite path ───────────────────────────────────────────────────────────────
+
+def _retrieve_sqlite(user_id, query_embedding, top_k, agent_id):
+    conn = get_conn()
+    cur  = conn.cursor()
+
+    if agent_id:
+        cur.execute("""
+            SELECT id, content, category, importance, recall_count, last_accessed_at,
+                   agent_id, visibility, embedding
+            FROM memories
+            WHERE user_id = ?
+              AND (visibility = 'shared' OR (visibility = 'private' AND agent_id = ?))
+        """, (user_id, agent_id))
+    else:
+        cur.execute("""
+            SELECT id, content, category, importance, recall_count, last_accessed_at,
+                   agent_id, visibility, embedding
+            FROM memories
+            WHERE user_id = ? AND visibility = 'shared'
+        """, (user_id,))
+
+    candidates = []
+    for row in cur.fetchall():
+        raw_emb = row["embedding"]
+        if raw_emb is None:
+            continue
+        sim = _cosine(query_embedding, json.loads(raw_emb))
+        if sim >= SIMILARITY_THRESHOLD:
+            d = dict(row)
+            d["similarity"] = sim
+            candidates.append(d)
+
+    return _score_and_return(candidates, top_k, cur, conn, backend="sqlite")
+
+
+# ── Shared scoring + return ───────────────────────────────────────────────────
+
+def _score_and_return(candidates, top_k, cur, conn, backend):
     if not candidates:
         cur.close()
         conn.close()
         return {"memoriesFound": 0, "context": "", "memories": []}
 
-    # Filter by similarity threshold, then score = similarity × strength
     scored = []
     for m in candidates:
-        if m["similarity"] < SIMILARITY_THRESHOLD:
-            continue
         strength = compute_strength(
-            last_accessed_at=m["last_accessed_at"],
+            last_accessed_at=_parse_dt(m["last_accessed_at"]),
             recall_count=m["recall_count"],
             importance=m["importance"],
             category=m["category"],
@@ -90,21 +153,26 @@ def retrieve(user_id: str, query: str, top_k: int = 5, agent_id: str = None) -> 
         conn.close()
         return {"memoriesFound": 0, "context": "", "memories": []}
 
-    # Only reinforce memories that are genuinely relevant (high similarity)
     relevant_ids = [m["id"] for m in top if m["similarity"] >= REINFORCE_THRESHOLD]
     if relevant_ids:
-        cur.execute("""
-            UPDATE memories
-            SET recall_count     = recall_count + 1,
-                last_accessed_at = NOW()
-            WHERE id = ANY(%s)
-        """, (relevant_ids,))
+        if backend == "postgres":
+            cur.execute("""
+                UPDATE memories
+                SET recall_count = recall_count + 1, last_accessed_at = NOW()
+                WHERE id = ANY(%s)
+            """, (relevant_ids,))
+        else:
+            for mid in relevant_ids:
+                cur.execute("""
+                    UPDATE memories
+                    SET recall_count = recall_count + 1, last_accessed_at = datetime('now')
+                    WHERE id = ?
+                """, (mid,))
     conn.commit()
 
     facts       = [m for m in top if m["category"] == "fact"]
     assumptions = [m for m in top if m["category"] == "assumption"]
 
-    # Build context string with sections
     context_parts = []
     if facts:
         context_parts.append("[Facts]\n" + "\n".join(m["content"] for m in facts))
@@ -123,8 +191,8 @@ def retrieve(user_id: str, query: str, top_k: int = 5, agent_id: str = None) -> 
                 "id":         m["id"],
                 "content":    m["content"],
                 "category":   m["category"],
-                "agent_id":   m["agent_id"],
-                "visibility": m["visibility"],
+                "agent_id":   m.get("agent_id"),
+                "visibility": m.get("visibility"),
                 "importance": round(m["importance"], 4),
                 "strength":   round(m["strength"], 4),
                 "similarity": round(m["similarity"], 4),

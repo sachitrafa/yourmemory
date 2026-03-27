@@ -1,6 +1,5 @@
-import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import json
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -10,6 +9,7 @@ from src.services.extract import is_question, categorize
 from src.services.embed import embed
 from src.services.decay import compute_strength
 from src.services.resolve import resolve
+from src.db.connection import get_backend, get_conn, emb_to_db
 
 load_dotenv()
 
@@ -21,7 +21,7 @@ DEFAULT_IMPORTANCE = 0.5
 class MemoryRequest(BaseModel):
     userId: str
     content: str
-    importance: float = DEFAULT_IMPORTANCE  # 0.0 (ephemeral) to 1.0 (permanent)
+    importance: float = DEFAULT_IMPORTANCE
 
 
 class UpdateMemoryRequest(BaseModel):
@@ -29,21 +29,30 @@ class UpdateMemoryRequest(BaseModel):
     importance: float = DEFAULT_IMPORTANCE
 
 
-def get_conn():
-    return psycopg2.connect(os.getenv("DATABASE_URL"))
+def _parse_dt(value) -> datetime:
+    if isinstance(value, str):
+        try:
+            dt = datetime.fromisoformat(value)
+        except ValueError:
+            return datetime.now(timezone.utc)
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+    return datetime.now(timezone.utc)
 
+
+# ── POST /memories ─────────────────────────────────────────────────────────────
 
 @router.post("/memories")
 def add_memory(req: MemoryRequest):
     if is_question(req.content):
         raise HTTPException(status_code=422, detail="Questions are not stored as memories.")
 
-    category = categorize(req.content)
-    embedding = embed(req.content)
-    embedding_str = f"[{','.join(str(x) for x in embedding)}]"
-
-    conn = get_conn()
-    cur = conn.cursor()
+    category   = categorize(req.content)
+    embedding  = embed(req.content)
+    backend    = get_backend()
+    conn       = get_conn()
+    cur        = conn.cursor()
 
     resolution    = resolve(req.userId, req.content, embedding, conn)
     action        = resolution["action"]
@@ -51,84 +60,127 @@ def add_memory(req: MemoryRequest):
     existing      = resolution["existing"]
 
     if action == "reinforce":
-        cur.execute("""
-            UPDATE memories SET recall_count = recall_count + 1, last_accessed_at = NOW()
-            WHERE id = %s RETURNING id
-        """, (existing["id"],))
+        if backend == "postgres":
+            cur.execute("""
+                UPDATE memories SET recall_count = recall_count + 1, last_accessed_at = NOW()
+                WHERE id = %s RETURNING id
+            """, (existing["id"],))
+        else:
+            cur.execute("""
+                UPDATE memories SET recall_count = recall_count + 1, last_accessed_at = datetime('now')
+                WHERE id = ?
+            """, (existing["id"],))
         memory_id = existing["id"]
         category  = existing["category"]
 
     elif action in ("replace", "merge"):
         new_embedding = embed(final_content)
-        new_emb_str   = f"[{','.join(str(x) for x in new_embedding)}]"
+        new_emb_str   = emb_to_db(new_embedding, backend)
         new_category  = categorize(final_content)
         try:
-            cur.execute("""
-                UPDATE memories
-                SET content = %s, embedding = %s::vector, category = %s,
-                    recall_count = recall_count + 1, last_accessed_at = NOW()
-                WHERE id = %s RETURNING id
-            """, (final_content, new_emb_str, new_category, existing["id"]))
+            if backend == "postgres":
+                cur.execute("""
+                    UPDATE memories
+                    SET content = %s, embedding = %s::vector, category = %s,
+                        recall_count = recall_count + 1, last_accessed_at = NOW()
+                    WHERE id = %s RETURNING id
+                """, (final_content, new_emb_str, new_category, existing["id"]))
+            else:
+                cur.execute("""
+                    UPDATE memories
+                    SET content = ?, embedding = ?, category = ?,
+                        recall_count = recall_count + 1, last_accessed_at = datetime('now')
+                    WHERE id = ?
+                """, (final_content, new_emb_str, new_category, existing["id"]))
             memory_id = existing["id"]
             category  = new_category
         except Exception:
             conn.rollback()
-            cur.execute("""
-                UPDATE memories SET recall_count = recall_count + 1, last_accessed_at = NOW()
-                WHERE user_id = %s AND content = %s RETURNING id
-            """, (req.userId, final_content))
+            # Merged content already exists — reinforce the existing row
+            if backend == "postgres":
+                cur.execute("""
+                    UPDATE memories SET recall_count = recall_count + 1, last_accessed_at = NOW()
+                    WHERE user_id = %s AND content = %s RETURNING id
+                """, (req.userId, final_content))
+            else:
+                cur.execute("""
+                    UPDATE memories SET recall_count = recall_count + 1, last_accessed_at = datetime('now')
+                    WHERE user_id = ? AND content = ?
+                """, (req.userId, final_content))
             memory_id = existing["id"]
             category  = existing["category"]
 
     else:  # "new"
-        cur.execute("""
-            INSERT INTO memories (user_id, content, category, importance, embedding)
-            VALUES (%s, %s, %s, %s, %s::vector)
-            ON CONFLICT (user_id, content) DO UPDATE
-                SET recall_count = memories.recall_count + 1, last_accessed_at = NOW()
-            RETURNING id
-        """, (req.userId, final_content, category, req.importance, embedding_str))
-        memory_id = cur.fetchone()[0]
+        emb_str = emb_to_db(embedding, backend)
+        if backend == "postgres":
+            cur.execute("""
+                INSERT INTO memories (user_id, content, category, importance, embedding)
+                VALUES (%s, %s, %s, %s, %s::vector)
+                ON CONFLICT (user_id, content) DO UPDATE
+                    SET recall_count = memories.recall_count + 1, last_accessed_at = NOW()
+                RETURNING id
+            """, (req.userId, final_content, category, req.importance, emb_str))
+            memory_id = cur.fetchone()[0]
+        else:
+            cur.execute("""
+                INSERT INTO memories (user_id, content, category, importance, embedding)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (user_id, content) DO UPDATE
+                    SET recall_count = recall_count + 1, last_accessed_at = datetime('now')
+            """, (req.userId, final_content, category, req.importance, emb_str))
+            memory_id = cur.lastrowid
 
     conn.commit()
     cur.close()
     conn.close()
 
     return {
-        "stored": 1,
-        "id": memory_id,
-        "content": final_content,
+        "stored":   1,
+        "id":       memory_id,
+        "content":  final_content,
         "category": category,
-        "action": action,
+        "action":   action,
     }
 
 
+# ── PUT /memories/{id} ─────────────────────────────────────────────────────────
+
 @router.put("/memories/{memory_id}")
 def update_memory(memory_id: int, req: UpdateMemoryRequest):
-    """
-    Replace the content (and re-embed) of an existing memory.
-    Used by Claude when it decides to merge or override an existing memory.
-    """
-    category = categorize(req.content)
+    category  = categorize(req.content)
     embedding = embed(req.content)
-    embedding_str = f"[{','.join(str(x) for x in embedding)}]"
+    backend   = get_backend()
+    emb_str   = emb_to_db(embedding, backend)
+    conn      = get_conn()
+    cur       = conn.cursor()
 
-    conn = get_conn()
-    cur = conn.cursor()
+    if backend == "postgres":
+        cur.execute("""
+            UPDATE memories
+            SET content          = %s,
+                embedding        = %s::vector,
+                category         = %s,
+                importance       = %s,
+                recall_count     = recall_count + 1,
+                last_accessed_at = NOW()
+            WHERE id = %s
+            RETURNING id, content, category, importance
+        """, (req.content, emb_str, category, req.importance, memory_id))
+        row = cur.fetchone()
+    else:
+        cur.execute("""
+            UPDATE memories
+            SET content          = ?,
+                embedding        = ?,
+                category         = ?,
+                importance       = ?,
+                recall_count     = recall_count + 1,
+                last_accessed_at = datetime('now')
+            WHERE id = ?
+        """, (req.content, emb_str, category, req.importance, memory_id))
+        cur.execute("SELECT id, content, category, importance FROM memories WHERE id = ?", (memory_id,))
+        row = cur.fetchone()
 
-    cur.execute("""
-        UPDATE memories
-        SET content          = %s,
-            embedding        = %s::vector,
-            category         = %s,
-            importance       = %s,
-            recall_count     = recall_count + 1,
-            last_accessed_at = NOW()
-        WHERE id = %s
-        RETURNING id, content, category, importance
-    """, (req.content, embedding_str, category, req.importance, memory_id))
-
-    row = cur.fetchone()
     conn.commit()
     cur.close()
     conn.close()
@@ -136,76 +188,87 @@ def update_memory(memory_id: int, req: UpdateMemoryRequest):
     if row is None:
         raise HTTPException(status_code=404, detail=f"Memory {memory_id} not found.")
 
-    return {
-        "updated": 1,
-        "id": row[0],
-        "content": row[1],
-        "category": row[2],
-        "importance": row[3],
-    }
+    return {"updated": 1, "id": row[0], "content": row[1], "category": row[2], "importance": row[3]}
 
+
+# ── GET /memories ──────────────────────────────────────────────────────────────
 
 @router.get("/memories")
 def list_memories(
     userId: str = Query(..., description="User whose memories to list"),
     limit: int = Query(50, ge=1, le=500),
-    category: Optional[str] = Query(None, description="Filter by 'fact' or 'assumption'"),
+    category: Optional[str] = Query(None),
 ):
-    """
-    List all memories for a user with live-computed strength scores.
-    Useful for inspecting, debugging, and building a memory management UI.
-    """
-    conn = get_conn()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    backend = get_backend()
+    conn    = get_conn()
+    cur     = conn.cursor()
 
-    sql = """
-        SELECT id, content, category, importance, recall_count,
-               last_accessed_at, created_at
-        FROM memories
-        WHERE user_id = %s
-    """
-    params: list = [userId]
+    if backend == "postgres":
+        from psycopg2.extras import RealDictCursor
+        cur.close()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        sql    = "SELECT id, content, category, importance, recall_count, last_accessed_at, created_at FROM memories WHERE user_id = %s"
+        params = [userId]
+        if category:
+            sql += " AND category = %s"
+            params.append(category)
+        sql += " ORDER BY last_accessed_at DESC LIMIT %s"
+        params.append(limit)
+        cur.execute(sql, params)
+        rows = [dict(r) for r in cur.fetchall()]
+    else:
+        sql    = "SELECT id, content, category, importance, recall_count, last_accessed_at, created_at FROM memories WHERE user_id = ?"
+        params = [userId]
+        if category:
+            sql += " AND category = ?"
+            params.append(category)
+        sql += " ORDER BY last_accessed_at DESC LIMIT ?"
+        params.append(limit)
+        cur.execute(sql, params)
+        rows = [dict(r) for r in cur.fetchall()]
 
-    if category:
-        sql += " AND category = %s"
-        params.append(category)
-
-    sql += " ORDER BY last_accessed_at DESC LIMIT %s"
-    params.append(limit)
-
-    cur.execute(sql, params)
-    rows = cur.fetchall()
     cur.close()
     conn.close()
 
     memories = []
     for m in rows:
         strength = compute_strength(
-            last_accessed_at=m["last_accessed_at"],
+            last_accessed_at=_parse_dt(m["last_accessed_at"]),
             recall_count=m["recall_count"],
             importance=m["importance"],
             category=m["category"],
         )
         memories.append({
-            "id":              m["id"],
-            "content":         m["content"],
-            "category":        m["category"],
-            "importance":      round(m["importance"], 4),
-            "recall_count":    m["recall_count"],
-            "strength":        round(strength, 4),
-            "last_accessed_at": m["last_accessed_at"].isoformat(),
-            "created_at":      m["created_at"].isoformat(),
+            "id":               m["id"],
+            "content":          m["content"],
+            "category":         m["category"],
+            "importance":       round(m["importance"], 4),
+            "recall_count":     m["recall_count"],
+            "strength":         round(strength, 4),
+            "last_accessed_at": str(m["last_accessed_at"]),
+            "created_at":       str(m["created_at"]),
         })
 
     return {"total": len(memories), "memories": memories}
 
 
+# ── DELETE /memories/{id} ──────────────────────────────────────────────────────
+
 @router.delete("/memories/{memory_id}")
 def delete_memory(memory_id: int):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM memories WHERE id = %s RETURNING id", (memory_id,))
-    row = cur.fetchone()
+    backend = get_backend()
+    conn    = get_conn()
+    cur     = conn.cursor()
+
+    if backend == "postgres":
+        cur.execute("DELETE FROM memories WHERE id = %s RETURNING id", (memory_id,))
+        row = cur.fetchone()
+    else:
+        cur.execute("SELECT id FROM memories WHERE id = ?", (memory_id,))
+        row = cur.fetchone()
+        if row:
+            cur.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+
     conn.commit()
     cur.close()
     conn.close()

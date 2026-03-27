@@ -3,13 +3,23 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "cognitive-ai-memory"
-version = "1.0.1"
-description = "Persistent memory for Claude using the Ebbinghaus Forgetting Curve"
+name = "yourmemory"
+version = "1.0.3"
+description = "Persistent memory for Claude — Ebbinghaus forgetting curve, semantic deduplication, MCP-native"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
-keywords = ["mcp", "claude", "memory", "ebbinghaus", "ai"]
+license = { file = "LICENSE" }
+authors = [
+    { name = "Sachit Misra", email = "mishrasachit1@gmail.com" }
+]
+keywords = ["mcp", "claude", "memory", "ebbinghaus", "ai", "sqlite", "postgresql"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
@@ -20,7 +30,9 @@ dependencies = [
     "apscheduler",
     "mcp",
     "spacy>=3.7,<4.0",
-    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
+    "sentence-transformers",
+    "numpy",
+    "python-dateutil",
 ]
 
 [project.scripts]

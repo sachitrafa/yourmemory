@@ -49,58 +49,19 @@ Importance additionally modulates the decay rate within each category. Memories 
 
 ## Setup
 
-No Docker required. Uses your local PostgreSQL.
+**Zero infrastructure required** — uses SQLite out of the box. Two commands and you're done.
 
-### 1. Install PostgreSQL + pgvector
-
-**macOS**
-```bash
-brew install postgresql@16 pgvector
-brew services start postgresql@16
-```
-
-**Ubuntu / Debian**
-```bash
-sudo apt install postgresql postgresql-contrib
-sudo apt install postgresql-16-pgvector   # adjust version to match yours
-```
-
-**Windows** — download the installer from [postgresql.org](https://www.postgresql.org/download/windows/), then install the [pgvector extension](https://github.com/pgvector/pgvector).
-
-### 2. Clone and configure
+### 1. Install
 
 ```bash
-git clone https://github.com/sachitrafa/cognitive-ai-memory
-cd cognitive-ai-memory
-pip install -r requirements.txt
-python -m spacy download en_core_web_sm
+pip install yourmemory
 ```
 
-Create a `.env` file:
-```bash
-DATABASE_URL=postgresql://YOUR_USER@localhost:5432/yourmemory
-```
+All dependencies are installed automatically. No clone, no separate download steps needed.
 
-Replace `YOUR_USER` with your system username (run `whoami` to check).
+### 2. Wire into Claude
 
-### 3. Create the database and start
-
-```bash
-createdb yourmemory
-python main.py
-```
-
-Migration and the decay scheduler run automatically on first boot.
-
-> **One-liner setup script** (macOS/Linux): `bash scripts/setup_db.sh` handles steps 1–3 automatically.
-
-**Start the MCP server:**
-
-```bash
-yourmemory
-```
-
-**Wire into Claude (`~/.claude/settings.json`):**
+Add to `~/.claude/settings.json`:
 
 ```json
 {
@@ -114,13 +75,41 @@ yourmemory
 
 Reload Claude Code (`Cmd+Shift+P` → `Developer: Reload Window`).
 
-**Add memory instructions to your project:**
+The database is created automatically at `~/.yourmemory/memories.db` on first use. No `.env` file needed.
+
+### 3. Add memory instructions to your project
 
 Copy `sample_CLAUDE.md` into your project root as `CLAUDE.md` and replace:
 - `YOUR_NAME` — your name (e.g. `Alice`)
 - `YOUR_USER_ID` — used to namespace memories (e.g. `alice`)
 
 Claude will now follow the recall → store → update workflow automatically on every task.
+
+---
+
+### PostgreSQL (optional — for teams or large datasets)
+
+If you have PostgreSQL + pgvector, create a `.env` file:
+
+```bash
+DATABASE_URL=postgresql://YOUR_USER@localhost:5432/yourmemory
+```
+
+The backend is selected automatically — `postgresql://` in `DATABASE_URL` → Postgres + pgvector, anything else → SQLite.
+
+**macOS**
+```bash
+brew install postgresql@16 pgvector && brew services start postgresql@16
+createdb yourmemory
+```
+
+**Ubuntu / Debian**
+```bash
+sudo apt install postgresql postgresql-contrib postgresql-16-pgvector
+createdb yourmemory
+```
+
+> **One-liner setup script** (macOS/Linux): `bash scripts/setup_db.sh` handles install + DB creation automatically.
 
 ---
 

@@ -2,17 +2,19 @@
 Semantic deduplication for POST /memories.
 
 Detects near-duplicate memories via cosine similarity and applies one of:
-  - reinforce : sim ≥ 0.95  — paraphrase, bump recall_count only
-  - replace   : 0.85–0.95 + contradiction detected — overwrite with incoming
-  - merge     : 0.85–0.95 + no contradiction — entity-append to existing
-  - new       : sim < 0.85  — genuinely distinct, plain INSERT
+  - reinforce : sim ≥ 0.85  — paraphrase, bump recall_count only
+  - replace   : 0.65–0.85 + contradiction detected — overwrite with incoming
+  - merge     : 0.65–0.85 + no contradiction — entity-append to existing
+  - new       : sim < 0.65  — genuinely distinct, plain INSERT
 """
 
+import json
 import math
 from src.services.extract import _nlp
+from src.db.connection import get_backend
 
-DEDUP_THRESHOLD     = 0.85   # below → always new memory
-REINFORCE_THRESHOLD = 0.95   # at or above → reinforce (paraphrase)
+DEDUP_THRESHOLD     = 0.65   # below → always new memory
+REINFORCE_THRESHOLD = 0.85   # at or above → reinforce (near-identical paraphrase)
 
 # Polarity verb antonym pairs (spaCy lemma → antonym lemma)
 _ANTONYMS = {
@@ -26,37 +28,73 @@ _ANTONYMS = {
 }
 
 
-def find_near_duplicate(user_id: str, embedding_str: str, conn) -> dict | None:
+def _cosine(a: list, b: list) -> float:
+    import numpy as np
+    va, vb = np.array(a, dtype=float), np.array(b, dtype=float)
+    denom = np.linalg.norm(va) * np.linalg.norm(vb)
+    return float(np.dot(va, vb) / denom) if denom else 0.0
+
+
+def find_near_duplicate(user_id: str, embedding: list, conn) -> dict | None:
     """
     Return the closest existing memory if cosine similarity >= DEDUP_THRESHOLD,
     else None. Uses the caller's open connection.
     """
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT id, content, category, importance, recall_count,
-               1 - (embedding <=> %s::vector) AS similarity
-        FROM memories
-        WHERE user_id = %s
-        ORDER BY embedding <=> %s::vector
-        LIMIT 1
-    """, (embedding_str, user_id, embedding_str))
-    row = cur.fetchone()
-    cur.close()
+    backend = get_backend()
 
-    if row is None:
-        return None
+    if backend == "postgres":
+        embedding_str = f"[{','.join(str(x) for x in embedding)}]"
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, content, category, importance, recall_count,
+                   1 - (embedding <=> %s::vector) AS similarity
+            FROM memories
+            WHERE user_id = %s
+            ORDER BY embedding <=> %s::vector
+            LIMIT 1
+        """, (embedding_str, user_id, embedding_str))
+        row = cur.fetchone()
+        cur.close()
 
-    sim = row[5]
+        if row is None:
+            return None
+        sim = row[5]
+
+    else:
+        # SQLite: compute cosine similarity in Python over all user memories
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, content, category, importance, recall_count, embedding
+            FROM memories
+            WHERE user_id = ?
+        """, (user_id,))
+        rows = cur.fetchall()
+        cur.close()
+
+        best, sim = None, -1.0
+        for row in rows:
+            raw = row[5] if isinstance(row, tuple) else row["embedding"]
+            if raw is None:
+                continue
+            s = _cosine(embedding, json.loads(raw))
+            if s > sim:
+                sim, best = s, row
+        if best is None:
+            return None
+        row = best  # use below
+
     if sim < DEDUP_THRESHOLD:
         return None
 
+    if backend == "postgres":
+        return {
+            "id": row[0], "content": row[1], "category": row[2],
+            "importance": row[3], "recall_count": row[4], "similarity": sim,
+        }
+    # SQLite row
     return {
-        "id":          row[0],
-        "content":     row[1],
-        "category":    row[2],
-        "importance":  row[3],
-        "recall_count": row[4],
-        "similarity":  sim,
+        "id": row[0], "content": row[1], "category": row[2],
+        "importance": row[3], "recall_count": row[4], "similarity": sim,
     }
 
 
@@ -81,8 +119,7 @@ def merge_entities(existing_text: str, incoming_text: str) -> str:
     Returns the merged string, or existing_text unchanged if nothing new found.
     """
     existing_lower = existing_text.lower()
-
-    incoming_doc = _nlp(incoming_text)
+    incoming_doc   = _nlp(incoming_text)
 
     # Layer 1: named entities
     candidates = [ent.text for ent in incoming_doc.ents]
@@ -94,14 +131,10 @@ def merge_entities(existing_text: str, incoming_text: str) -> str:
         if tok.text[0].isupper() and not tok.is_stop and len(tok.text) > 2
     ]
 
-    new_terms = [
-        t for t in candidates
-        if t.lower() not in existing_lower and len(t.strip()) > 2
-    ]
+    new_terms = [t for t in candidates if t.lower() not in existing_lower and len(t.strip()) > 2]
 
     # Deduplicate while preserving order
-    seen = set()
-    deduped = []
+    seen, deduped = set(), []
     for t in new_terms:
         if t.lower() not in seen:
             seen.add(t.lower())
@@ -125,8 +158,7 @@ def resolve(user_id: str, content: str, embedding: list, conn) -> dict:
           "existing": dict | None,  # matched row if any
         }
     """
-    embedding_str = f"[{','.join(str(x) for x in embedding)}]"
-    match = find_near_duplicate(user_id, embedding_str, conn)
+    match = find_near_duplicate(user_id, embedding, conn)
 
     if match is None:
         return {"action": "new", "content": content, "existing": None}
@@ -136,9 +168,13 @@ def resolve(user_id: str, content: str, embedding: list, conn) -> dict:
     if sim >= REINFORCE_THRESHOLD:
         return {"action": "reinforce", "content": match["content"], "existing": match}
 
-    # 0.85 ≤ sim < 0.95
+    # DEDUP_THRESHOLD ≤ sim < REINFORCE_THRESHOLD
     if detect_contradiction(match["content"], content):
         return {"action": "replace", "content": content, "existing": match}
 
     merged = merge_entities(match["content"], content)
+    if merged == match["content"]:
+        # No new entities found — treat as paraphrase
+        return {"action": "reinforce", "content": match["content"], "existing": match}
+
     return {"action": "merge", "content": merged, "existing": match}

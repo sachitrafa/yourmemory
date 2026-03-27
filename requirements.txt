@@ -8,4 +8,5 @@ apscheduler
 spacy
 sentence-transformers
 python-dateutil
+numpy
 mcp

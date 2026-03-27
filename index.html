@@ -200,8 +200,8 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                 </a>
                 <div class="font-mono text-sm text-slate-600 flex items-center gap-2 px-4 py-3 card">
-                    <span class="text-blue-600">$</span> docker compose up -d
-                    <button onclick="copyCmd('docker compose up -d')" class="ml-2 text-slate-600 hover:text-slate-700 transition-colors">
+                    <span class="text-blue-600">$</span> pip install yourmemory
+                    <button onclick="copyCmd('pip install yourmemory')" class="ml-2 text-slate-600 hover:text-slate-700 transition-colors">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                     </button>
                 </div>
@@ -258,7 +258,7 @@
                         <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
                     </div>
                     <h3 class="font-semibold mb-2 text-sm">Fully Local</h3>
-                    <p class="text-slate-600 text-sm leading-relaxed">Runs on your machine via Docker. No external API calls for retrieval. Your data never leaves your infrastructure.</p>
+                    <p class="text-slate-600 text-sm leading-relaxed">SQLite by default — no Docker, no database setup. Upgrade to PostgreSQL + pgvector any time. Your data never leaves your machine.</p>
                 </div>
                 <div class="card p-6">
                     <div class="w-8 h-8 rounded-lg bg-blue-600/15 flex items-center justify-center mb-4">
@@ -340,7 +340,7 @@
                             </tr>
                             <tr>
                                 <td class="text-slate-600">Storage architecture</td>
-                                <td class="winner">PostgreSQL + pgvector</td>
+                                <td class="winner">SQLite (default) · PostgreSQL opt-in</td>
                                 <td class="loser">pgvector + knowledge graph</td>
                                 <td class="loser">Managed cloud</td>
                             </tr>
@@ -404,26 +404,109 @@
             <div class="text-center mb-10">
                 <div class="section-label">Setup</div>
                 <h2 class="text-2xl font-bold mb-3 text-slate-900">Up and running in two steps</h2>
-                <p class="text-slate-600 text-sm">Requires Docker and Ollama with <code>nomic-embed-text</code> pulled.</p>
+                <p class="text-slate-600 text-sm">No Docker. No database setup. SQLite works out of the box.</p>
             </div>
 
-            <div class="space-y-4">
+            <!-- Tab switcher -->
+            <div class="flex gap-1 p-1 bg-slate-100 rounded-lg mb-6" role="tablist">
+                <button onclick="switchTab('sqlite')" id="tab-sqlite"
+                    class="flex-1 text-xs font-semibold py-2 px-3 rounded-md transition-all bg-white text-blue-600 shadow-sm">
+                    SQLite <span class="text-slate-400 font-normal">(default)</span>
+                </button>
+                <button onclick="switchTab('postgres')" id="tab-postgres"
+                    class="flex-1 text-xs font-semibold py-2 px-3 rounded-md transition-all text-slate-600 hover:text-slate-800">
+                    PostgreSQL <span class="text-slate-400 font-normal">(optional)</span>
+                </button>
+            </div>
+
+            <!-- SQLite tab -->
+            <div id="panel-sqlite" class="space-y-4">
                 <div class="card p-5">
-                    <div class="text-xs font-semibold text-blue-600 mb-3 font-mono">1. Start the server</div>
+                    <div class="text-xs font-semibold text-blue-600 mb-3 font-mono">1. Install</div>
                     <div class="flex items-center justify-between bg-slate-50 rounded p-3 font-mono text-xs text-slate-700 border border-slate-200">
-                        <code class="bg-transparent border-0 p-0 text-slate-700">git clone https://github.com/sachitrafa/cognitive-ai-memory.git && cd cognitive-ai-memory && docker compose up -d</code>
-                        <button onclick="copyCmd('git clone https://github.com/sachitrafa/cognitive-ai-memory.git && cd cognitive-ai-memory && docker compose up -d')" class="ml-3 text-slate-600 hover:text-slate-700 flex-shrink-0">
+                        <span>pip install yourmemory</span>
+                        <button onclick="copyCmd('pip install yourmemory')" class="ml-3 text-slate-400 hover:text-slate-600 flex-shrink-0">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                        </button>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2">All dependencies installed automatically. Database created at <code>~/.yourmemory/memories.db</code> on first run.</p>
+                </div>
+
+                <div class="card p-5">
+                    <div class="text-xs font-semibold text-blue-600 mb-3 font-mono">2. Wire into Claude (~/.claude/settings.json)</div>
+                    <div class="bg-slate-50 rounded p-3 font-mono text-xs text-slate-600 border border-slate-200 leading-relaxed">
+                        {<br/>
+                        &nbsp;&nbsp;"mcpServers": {<br/>
+                        &nbsp;&nbsp;&nbsp;&nbsp;"yourmemory": {<br/>
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"command": "yourmemory"<br/>
+                        &nbsp;&nbsp;&nbsp;&nbsp;}<br/>
+                        &nbsp;&nbsp;}<br/>
+                        }
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2">Then reload Claude Code: <code>Cmd+Shift+P</code> → <code>Developer: Reload Window</code></p>
+                </div>
+
+                <div class="card p-5">
+                    <div class="text-xs font-semibold text-blue-600 mb-3 font-mono">3. Add memory instructions to your project</div>
+                    <p class="text-xs text-slate-600 leading-relaxed">Copy <code>sample_CLAUDE.md</code> from the repo into your project root as <code>CLAUDE.md</code>. Replace <code>YOUR_NAME</code> and <code>YOUR_USER_ID</code>. Claude will now recall, store, and update memories automatically on every task.</p>
+                </div>
+            </div>
+
+            <!-- PostgreSQL tab -->
+            <div id="panel-postgres" class="space-y-4 hidden">
+                <div class="card p-5">
+                    <div class="text-xs font-semibold text-blue-600 mb-3 font-mono">1. Install PostgreSQL + pgvector</div>
+                    <div class="space-y-2">
+                        <p class="text-xs text-slate-500 font-semibold mb-1">macOS</p>
+                        <div class="flex items-center justify-between bg-slate-50 rounded p-3 font-mono text-xs text-slate-700 border border-slate-200">
+                            <span>brew install postgresql@16 pgvector &amp;&amp; brew services start postgresql@16</span>
+                            <button onclick="copyCmd('brew install postgresql@16 pgvector && brew services start postgresql@16')" class="ml-3 text-slate-400 hover:text-slate-600 flex-shrink-0">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                            </button>
+                        </div>
+                        <p class="text-xs text-slate-500 font-semibold mt-3 mb-1">Ubuntu / Debian</p>
+                        <div class="flex items-center justify-between bg-slate-50 rounded p-3 font-mono text-xs text-slate-700 border border-slate-200">
+                            <span>sudo apt install postgresql postgresql-contrib postgresql-16-pgvector</span>
+                            <button onclick="copyCmd('sudo apt install postgresql postgresql-contrib postgresql-16-pgvector')" class="ml-3 text-slate-400 hover:text-slate-600 flex-shrink-0">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card p-5">
+                    <div class="text-xs font-semibold text-blue-600 mb-3 font-mono">2. Create the database</div>
+                    <div class="flex items-center justify-between bg-slate-50 rounded p-3 font-mono text-xs text-slate-700 border border-slate-200">
+                        <span>createdb yourmemory</span>
+                        <button onclick="copyCmd('createdb yourmemory')" class="ml-3 text-slate-400 hover:text-slate-600 flex-shrink-0">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                         </button>
                     </div>
                 </div>
 
                 <div class="card p-5">
-                    <div class="text-xs font-semibold text-blue-600 mb-3 font-mono">2. Add to Claude (claude_desktop_config.json)</div>
+                    <div class="text-xs font-semibold text-blue-600 mb-3 font-mono">3. Set DATABASE_URL in .env</div>
+                    <div class="flex items-center justify-between bg-slate-50 rounded p-3 font-mono text-xs text-slate-700 border border-slate-200">
+                        <span>DATABASE_URL=postgresql://YOUR_USER@localhost:5432/yourmemory</span>
+                        <button onclick="copyCmd('DATABASE_URL=postgresql://YOUR_USER@localhost:5432/yourmemory')" class="ml-3 text-slate-400 hover:text-slate-600 flex-shrink-0">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                        </button>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2">Replace <code>YOUR_USER</code> with your system username (<code>whoami</code>). The backend switches automatically.</p>
+                </div>
+
+                <div class="card p-5">
+                    <div class="text-xs font-semibold text-blue-600 mb-3 font-mono">4. Install &amp; wire into Claude</div>
+                    <div class="flex items-center justify-between bg-slate-50 rounded p-3 font-mono text-xs text-slate-700 border border-slate-200 mb-3">
+                        <span>pip install yourmemory</span>
+                        <button onclick="copyCmd('pip install yourmemory')" class="ml-3 text-slate-400 hover:text-slate-600 flex-shrink-0">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                        </button>
+                    </div>
                     <div class="bg-slate-50 rounded p-3 font-mono text-xs text-slate-600 border border-slate-200 leading-relaxed">
                         {<br/>
                         &nbsp;&nbsp;"mcpServers": {<br/>
-                        &nbsp;&nbsp;&nbsp;&nbsp;"cognitive-memory": {<br/>
+                        &nbsp;&nbsp;&nbsp;&nbsp;"yourmemory": {<br/>
                         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"command": "yourmemory"<br/>
                         &nbsp;&nbsp;&nbsp;&nbsp;}<br/>
                         &nbsp;&nbsp;}<br/>
@@ -457,6 +540,23 @@
     </div>
 
     <script>
+        function switchTab(tab) {
+            const tabs = ['sqlite', 'postgres'];
+            tabs.forEach(t => {
+                const btn = document.getElementById('tab-' + t);
+                const panel = document.getElementById('panel-' + t);
+                if (t === tab) {
+                    btn.classList.add('bg-white', 'text-blue-600', 'shadow-sm');
+                    btn.classList.remove('text-slate-600');
+                    panel.classList.remove('hidden');
+                } else {
+                    btn.classList.remove('bg-white', 'text-blue-600', 'shadow-sm');
+                    btn.classList.add('text-slate-600');
+                    panel.classList.add('hidden');
+                }
+            });
+        }
+
         function copyCmd(text) {
             navigator.clipboard.writeText(text).catch(() => {
                 const el = document.createElement('textarea');

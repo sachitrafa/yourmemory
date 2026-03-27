@@ -1,60 +1,74 @@
 """
-Run daily to update importance scores on all edges using the Ebbinghaus formula.
-Edges that decay below a threshold are pruned automatically.
+Run daily to prune memories that have decayed below the strength threshold.
+Runs automatically every 24 hours via the MCP server's background thread.
 
-Usage:
+Manual usage:
     python -m src.jobs.decay_job
-
-Or schedule via cron:
-    0 2 * * * python /path/to/yourmemory -m src.jobs.decay_job
 """
 
-import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 from src.services.decay import compute_strength
+from src.db.connection import get_backend, get_conn
 
 load_dotenv()
 
-PRUNE_THRESHOLD = 0.05  # edges weaker than this are deleted
+PRUNE_THRESHOLD = 0.05  # memories weaker than this are deleted
+
+
+def _parse_dt(value) -> datetime:
+    if isinstance(value, str):
+        try:
+            dt = datetime.fromisoformat(value)
+        except ValueError:
+            return datetime.now(timezone.utc)
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+    return datetime.now(timezone.utc)
 
 
 def run():
-    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    backend = get_backend()
+    conn    = get_conn()
+    cur     = conn.cursor()
 
-    cur.execute("""
-        SELECT id, category, importance, recall_count, last_accessed_at
-        FROM memories
-    """)
-    edges = cur.fetchall()
+    if backend == "postgres":
+        from psycopg2.extras import RealDictCursor
+        cur.close()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT id, category, importance, recall_count, last_accessed_at FROM memories")
+        edges = [dict(r) for r in cur.fetchall()]
+    else:
+        cur.execute("SELECT id, category, importance, recall_count, last_accessed_at FROM memories")
+        edges = [dict(r) for r in cur.fetchall()]
 
     updated = 0
-    pruned = 0
+    pruned  = 0
 
     for edge in edges:
         strength = compute_strength(
-            last_accessed_at=edge["last_accessed_at"],
+            last_accessed_at=_parse_dt(edge["last_accessed_at"]),
             recall_count=edge["recall_count"],
             importance=edge["importance"],
             category=edge["category"],
         )
 
         if strength < PRUNE_THRESHOLD:
-            cur.execute("DELETE FROM memories WHERE id = %s", (edge["id"],))
+            if backend == "postgres":
+                cur.execute("DELETE FROM memories WHERE id = %s", (edge["id"],))
+            else:
+                cur.execute("DELETE FROM memories WHERE id = ?", (edge["id"],))
             pruned += 1
         else:
-            # Do NOT overwrite importance — it is the fixed user-set base weight.
-            # Strength is always computed fresh from importance + days + recall_count.
             updated += 1
 
     conn.commit()
     cur.close()
     conn.close()
 
-    print(f"Decay job complete — updated: {updated}, pruned: {pruned}")
+    print(f"Decay job complete ({backend}) — updated: {updated}, pruned: {pruned}")
 
 
 if __name__ == "__main__":

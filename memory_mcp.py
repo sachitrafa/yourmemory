@@ -29,27 +29,24 @@ _services = {}
 def _load_services():
     if _services:
         return
-    import psycopg2
     from src.services.retrieve import retrieve as _retrieve
     from src.services.embed import embed
     from src.services.extract import is_question, categorize
     from src.services.api_keys import validate_api_key
     from src.services.resolve import resolve
-    _services["psycopg2"]          = psycopg2
-    _services["retrieve"]          = _retrieve
-    _services["embed"]             = embed
-    _services["is_question"]       = is_question
-    _services["categorize"]        = categorize
-    _services["validate_api_key"]  = validate_api_key
-    _services["resolve"]           = resolve
+    from src.db.connection import get_backend, get_conn, emb_to_db
+    _services["retrieve"]         = _retrieve
+    _services["embed"]            = embed
+    _services["is_question"]      = is_question
+    _services["categorize"]       = categorize
+    _services["validate_api_key"] = validate_api_key
+    _services["resolve"]          = resolve
+    _services["get_backend"]      = get_backend
+    _services["get_conn"]         = get_conn
+    _services["emb_to_db"]        = emb_to_db
 
-DEFAULT_USER = "sachit"
+DEFAULT_USER       = "sachit"
 DEFAULT_IMPORTANCE = 0.5
-
-
-def _get_conn():
-    _load_services()
-    return _services["psycopg2"].connect(os.getenv("DATABASE_URL"))
 
 
 # ── MCP Server ────────────────────────────────────────────────────────────────
@@ -180,11 +177,15 @@ async def list_tools() -> list[types.Tool]:
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     _load_services()
-    retrieve          = _services["retrieve"]
-    embed             = _services["embed"]
-    is_question       = _services["is_question"]
-    categorize        = _services["categorize"]
-    validate_api_key  = _services["validate_api_key"]
+    retrieve         = _services["retrieve"]
+    embed            = _services["embed"]
+    is_question      = _services["is_question"]
+    categorize       = _services["categorize"]
+    validate_api_key = _services["validate_api_key"]
+    resolve          = _services["resolve"]
+    get_backend      = _services["get_backend"]
+    get_conn         = _services["get_conn"]
+    emb_to_db        = _services["emb_to_db"]
 
     if name == "recall_memory":
         user_id = arguments.get("user_id", DEFAULT_USER)
@@ -202,7 +203,6 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         agent_id = agent["agent_id"] if agent else None
         result   = retrieve(user_id, query, top_k=top_k, agent_id=agent_id)
 
-        # Filter by can_read rules from the registration
         if agent:
             can_read = agent.get("can_read", [])
             if can_read:
@@ -218,13 +218,12 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         user_id = arguments.get("user_id", DEFAULT_USER)
         api_key = arguments.get("api_key")
 
-        # Resolve agent identity from API key
         if api_key:
             agent = validate_api_key(api_key)
             if not agent:
                 return [types.TextContent(type="text", text=json.dumps(
                     {"error": "Invalid or revoked API key."}))]
-            agent_id = agent["agent_id"]
+            agent_id  = agent["agent_id"]
             can_write = agent.get("can_write", ["shared", "private"])
         else:
             agent_id  = "user"
@@ -252,54 +251,84 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         category     = raw_category if raw_category in valid_categories else categorize(content)
         embedding    = embed(content)
 
-        conn = _get_conn()
-        cur  = conn.cursor()
+        backend = get_backend()
+        conn    = get_conn()
+        cur     = conn.cursor()
 
-        resolution    = _services["resolve"](user_id, content, embedding, conn)
+        resolution    = resolve(user_id, content, embedding, conn)
         action        = resolution["action"]
         final_content = resolution["content"]
         existing      = resolution["existing"]
 
         if action == "reinforce":
-            cur.execute("""
-                UPDATE memories SET recall_count = recall_count + 1, last_accessed_at = NOW()
-                WHERE id = %s RETURNING id
-            """, (existing["id"],))
+            if backend == "postgres":
+                cur.execute("""
+                    UPDATE memories SET recall_count = recall_count + 1, last_accessed_at = NOW()
+                    WHERE id = %s RETURNING id
+                """, (existing["id"],))
+            else:
+                cur.execute("""
+                    UPDATE memories SET recall_count = recall_count + 1, last_accessed_at = datetime('now')
+                    WHERE id = ?
+                """, (existing["id"],))
             memory_id = existing["id"]
             category  = existing["category"]
 
         elif action in ("replace", "merge"):
             new_embedding = embed(final_content)
-            new_emb_str   = f"[{','.join(str(x) for x in new_embedding)}]"
+            new_emb_str   = emb_to_db(new_embedding, backend)
             new_category  = categorize(final_content)
             try:
-                cur.execute("""
-                    UPDATE memories
-                    SET content = %s, embedding = %s::vector, category = %s,
-                        recall_count = recall_count + 1, last_accessed_at = NOW()
-                    WHERE id = %s RETURNING id
-                """, (final_content, new_emb_str, new_category, existing["id"]))
+                if backend == "postgres":
+                    cur.execute("""
+                        UPDATE memories
+                        SET content = %s, embedding = %s::vector, category = %s,
+                            recall_count = recall_count + 1, last_accessed_at = NOW()
+                        WHERE id = %s RETURNING id
+                    """, (final_content, new_emb_str, new_category, existing["id"]))
+                else:
+                    cur.execute("""
+                        UPDATE memories
+                        SET content = ?, embedding = ?, category = ?,
+                            recall_count = recall_count + 1, last_accessed_at = datetime('now')
+                        WHERE id = ?
+                    """, (final_content, new_emb_str, new_category, existing["id"]))
                 memory_id = existing["id"]
                 category  = new_category
             except Exception:
                 conn.rollback()
-                cur.execute("""
-                    UPDATE memories SET recall_count = recall_count + 1, last_accessed_at = NOW()
-                    WHERE user_id = %s AND content = %s RETURNING id
-                """, (user_id, final_content))
+                if backend == "postgres":
+                    cur.execute("""
+                        UPDATE memories SET recall_count = recall_count + 1, last_accessed_at = NOW()
+                        WHERE user_id = %s AND content = %s RETURNING id
+                    """, (user_id, final_content))
+                else:
+                    cur.execute("""
+                        UPDATE memories SET recall_count = recall_count + 1, last_accessed_at = datetime('now')
+                        WHERE user_id = ? AND content = ?
+                    """, (user_id, final_content))
                 memory_id = existing["id"]
                 category  = existing["category"]
 
         else:  # "new"
-            embedding_str = f"[{','.join(str(x) for x in embedding)}]"
-            cur.execute("""
-                INSERT INTO memories (user_id, content, category, importance, embedding, agent_id, visibility)
-                VALUES (%s, %s, %s, %s, %s::vector, %s, %s)
-                ON CONFLICT (user_id, content) DO UPDATE
-                    SET recall_count = memories.recall_count + 1, last_accessed_at = NOW()
-                RETURNING id
-            """, (user_id, final_content, category, importance, embedding_str, agent_id, visibility))
-            memory_id = cur.fetchone()[0]
+            emb_str = emb_to_db(embedding, backend)
+            if backend == "postgres":
+                cur.execute("""
+                    INSERT INTO memories (user_id, content, category, importance, embedding, agent_id, visibility)
+                    VALUES (%s, %s, %s, %s, %s::vector, %s, %s)
+                    ON CONFLICT (user_id, content) DO UPDATE
+                        SET recall_count = memories.recall_count + 1, last_accessed_at = NOW()
+                    RETURNING id
+                """, (user_id, final_content, category, importance, emb_str, agent_id, visibility))
+                memory_id = cur.fetchone()[0]
+            else:
+                cur.execute("""
+                    INSERT INTO memories (user_id, content, category, importance, embedding, agent_id, visibility)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (user_id, content) DO UPDATE
+                        SET recall_count = recall_count + 1, last_accessed_at = datetime('now')
+                """, (user_id, final_content, category, importance, emb_str, agent_id, visibility))
+                memory_id = cur.lastrowid
 
         conn.commit()
         cur.close()
@@ -318,14 +347,18 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
                 {"error": "importance is required (0.0–1.0). Re-evaluate after the update."}))]
         importance = max(0.0, min(1.0, float(arguments["importance"])))
 
-        category  = categorize(new_content)
+        category  = _services["categorize"](new_content)
         embedding = embed(new_content)
+        backend   = get_backend()
+        emb_str   = emb_to_db(embedding, backend)
+        conn      = get_conn()
+        cur       = conn.cursor()
 
-        conn = _get_conn()
-        cur  = conn.cursor()
-
-        # Fetch the memory's owner so resolve() can scope the dedup query
-        cur.execute("SELECT user_id FROM memories WHERE id = %s", (memory_id,))
+        # Fetch owner to scope the dedup query
+        if backend == "postgres":
+            cur.execute("SELECT user_id FROM memories WHERE id = %s", (memory_id,))
+        else:
+            cur.execute("SELECT user_id FROM memories WHERE id = ?", (memory_id,))
         owner = cur.fetchone()
         if owner is None:
             cur.close()
@@ -335,15 +368,22 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         user_id_owner = owner[0]
 
         # Check if new content clashes with a *different* row
-        resolution = _services["resolve"](user_id_owner, new_content, embedding, conn)
+        resolution = resolve(user_id_owner, new_content, embedding, conn)
         if resolution["action"] != "new" and resolution["existing"]["id"] != memory_id:
-            # New content is a duplicate of another row — reinforce that row instead
             existing = resolution["existing"]
-            cur.execute("""
-                UPDATE memories SET recall_count = recall_count + 1, last_accessed_at = NOW()
-                WHERE id = %s RETURNING id, content, category, importance
-            """, (existing["id"],))
-            row = cur.fetchone()
+            if backend == "postgres":
+                cur.execute("""
+                    UPDATE memories SET recall_count = recall_count + 1, last_accessed_at = NOW()
+                    WHERE id = %s RETURNING id, content, category, importance
+                """, (existing["id"],))
+                row = cur.fetchone()
+            else:
+                cur.execute("""
+                    UPDATE memories SET recall_count = recall_count + 1, last_accessed_at = datetime('now')
+                    WHERE id = ?
+                """, (existing["id"],))
+                cur.execute("SELECT id, content, category, importance FROM memories WHERE id = ?", (existing["id"],))
+                row = cur.fetchone()
             conn.commit()
             cur.close()
             conn.close()
@@ -351,19 +391,33 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
                 {"updated": 1, "id": row[0], "content": row[1], "category": row[2],
                  "importance": row[3], "action": "reinforce_existing"}))]
 
-        embedding_str = f"[{','.join(str(x) for x in embedding)}]"
-        cur.execute("""
-            UPDATE memories
-            SET content          = %s,
-                embedding        = %s::vector,
-                category         = %s,
-                importance       = %s,
-                recall_count     = recall_count + 1,
-                last_accessed_at = NOW()
-            WHERE id = %s
-            RETURNING id, content, category, importance
-        """, (new_content, embedding_str, category, importance, memory_id))
-        row = cur.fetchone()
+        if backend == "postgres":
+            cur.execute("""
+                UPDATE memories
+                SET content          = %s,
+                    embedding        = %s::vector,
+                    category         = %s,
+                    importance       = %s,
+                    recall_count     = recall_count + 1,
+                    last_accessed_at = NOW()
+                WHERE id = %s
+                RETURNING id, content, category, importance
+            """, (new_content, emb_str, category, importance, memory_id))
+            row = cur.fetchone()
+        else:
+            cur.execute("""
+                UPDATE memories
+                SET content          = ?,
+                    embedding        = ?,
+                    category         = ?,
+                    importance       = ?,
+                    recall_count     = recall_count + 1,
+                    last_accessed_at = datetime('now')
+                WHERE id = ?
+            """, (new_content, emb_str, category, importance, memory_id))
+            cur.execute("SELECT id, content, category, importance FROM memories WHERE id = ?", (memory_id,))
+            row = cur.fetchone()
+
         conn.commit()
         cur.close()
         conn.close()
@@ -385,7 +439,6 @@ def _start_decay_scheduler():
 
     def loop():
         run_decay()
-        # Schedule subsequent runs every 24 hours
         timer = threading.Event()
         while not timer.wait(timeout=86400):
             run_decay()
@@ -395,6 +448,9 @@ def _start_decay_scheduler():
 
 
 async def main():
+    # Run DB migration on startup (creates tables on first run, safe to repeat)
+    from src.db.migrate import migrate
+    migrate()
     _start_decay_scheduler()
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, server.create_initialization_options())
